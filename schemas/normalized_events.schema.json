@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/normalized_events.schema.json",
+  "title": "NormalizedEvents",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "events"
+  ],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/normalized_event"
+      }
+    }
+  },
+  "$defs": {
+    "normalized_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "source_scene_ids",
+        "event_group",
+        "event_type",
+        "title",
+        "description",
+        "characters",
+        "cause",
+        "consequence",
+        "must_keep"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_scene_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "event_group": {
+          "type": "string",
+          "enum": [
+            "setup",
+            "goal_progress",
+            "conflict",
+            "revelation",
+            "relationship",
+            "status_shift",
+            "resource_gain_loss",
+            "scheme_intrigue",
+            "emotion_romance",
+            "world_rule",
+            "transition",
+            "climax_resolution"
+          ]
+        },
+        "event_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "characters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "cause": {
+          "type": "string"
+        },
+        "consequence": {
+          "type": "string"
+        },
+        "must_keep": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

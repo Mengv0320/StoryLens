@@ -1,0 +1,14 @@
+{
+  "primary_genre": "power_growth",
+  "subgenre": "revenge_upgrade",
+  "secondary_genres": [
+    "political_intrigue"
+  ],
+  "confidence": 0.89,
+  "signals": [
+    "Protagonist uses hidden strength to survive an ambush during a sect trial",
+    "Power progression triggered by life-or-death combat and forced revelation of abilities",
+    "Emergence of a hidden factional plot within the sect, indicating internal power struggle",
+    "Shift from passive victim to active investigator seeking to expose higher-level enemies"
+  ]
+}

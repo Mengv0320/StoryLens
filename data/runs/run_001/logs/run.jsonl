@@ -1,0 +1,18 @@
+{"timestamp": "2026-03-16T16:31:07.645143+00:00", "event": "excerpt_start", "text_length": 235}
+{"timestamp": "2026-03-16T16:31:13.711841+00:00", "event": "stage_complete", "stage": "genre"}
+{"timestamp": "2026-03-16T16:31:27.938274+00:00", "event": "stage_complete", "stage": "scene_split"}
+{"timestamp": "2026-03-16T16:31:50.673231+00:00", "event": "stage_complete", "stage": "scene_extraction"}
+{"timestamp": "2026-03-16T16:32:09.625905+00:00", "event": "stage_complete", "stage": "scene_extraction"}
+{"timestamp": "2026-03-16T16:32:21.693824+00:00", "event": "stage_complete", "stage": "normalized_events"}
+{"timestamp": "2026-03-16T16:32:33.067688+00:00", "event": "stage_complete", "stage": "scores"}
+{"timestamp": "2026-03-16T16:32:46.380673+00:00", "event": "stage_complete", "stage": "episode"}
+{"timestamp": "2026-03-16T16:32:46.381687+00:00", "event": "excerpt_complete", "scenes": 2, "events": 2}
+{"timestamp": "2026-03-16T16:32:56.265406+00:00", "event": "excerpt_start", "text_length": 235}
+{"timestamp": "2026-03-16T16:32:56.265406+00:00", "event": "cache_hit", "stage": "genre"}
+{"timestamp": "2026-03-16T16:32:56.265406+00:00", "event": "cache_hit", "stage": "scene_split"}
+{"timestamp": "2026-03-16T16:32:56.266402+00:00", "event": "cache_hit", "stage": "scene_extraction"}
+{"timestamp": "2026-03-16T16:32:56.266402+00:00", "event": "cache_hit", "stage": "scene_extraction"}
+{"timestamp": "2026-03-16T16:32:56.266402+00:00", "event": "cache_hit", "stage": "normalized_events"}
+{"timestamp": "2026-03-16T16:32:56.267399+00:00", "event": "cache_hit", "stage": "scores"}
+{"timestamp": "2026-03-16T16:32:56.267399+00:00", "event": "cache_hit", "stage": "episode"}
+{"timestamp": "2026-03-16T16:32:56.268395+00:00", "event": "excerpt_complete", "scenes": 2, "events": 2}

@@ -1,0 +1,31 @@
+{
+  "scene_id": "scene_01",
+  "genre_guess": "power_growth",
+  "scene_function": "conflict",
+  "events": [
+    {
+      "event_id": "event_01",
+      "event_group": "goal_progress",
+      "event_type": "suppression_and_counter",
+      "title": "林凡遭伏击被迫暴露实力，识破高层阴谋",
+      "description": "林凡在宗门试炼中被赵虎等人伏击，被迫暴露部分隐藏实力反击；同时发现周执事偏袒敌人，意识到背后有高层势力要除掉自己。",
+      "participants": [
+        "林凡",
+        "赵虎",
+        "周执事",
+        "围观弟子"
+      ],
+      "cause": "宗门试炼被敌对势力利用为清除林凡的陷阱",
+      "consequence": "林凡决定主动追查幕后黑手，从被动转为主动",
+      "importance_to_main_plot": 1,
+      "emotion_value": 1,
+      "shock_value": 1,
+      "relationship_impact": 1,
+      "status_change": true,
+      "foreshadowing": true,
+      "payoff": false,
+      "must_keep": true,
+      "can_omit": false
+    }
+  ]
+}

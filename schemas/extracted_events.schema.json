@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/extracted_events.schema.json",
+  "title": "ExtractedSceneEvents",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scene_id",
+    "genre_guess",
+    "scene_function",
+    "events"
+  ],
+  "properties": {
+    "scene_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "genre_guess": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scene_function": {
+      "type": "string",
+      "enum": [
+        "setup",
+        "transition",
+        "conflict",
+        "reveal",
+        "relationship_push",
+        "power_shift",
+        "climax"
+      ]
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    }
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_group",
+        "event_type",
+        "title",
+        "description",
+        "participants",
+        "cause",
+        "consequence",
+        "importance_to_main_plot",
+        "emotion_value",
+        "shock_value",
+        "relationship_impact",
+        "status_change",
+        "foreshadowing",
+        "payoff",
+        "must_keep",
+        "can_omit"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_group": {
+          "type": "string",
+          "enum": [
+            "setup",
+            "goal_progress",
+            "conflict",
+            "revelation",
+            "relationship",
+            "status_shift",
+            "resource_gain_loss",
+            "scheme_intrigue",
+            "emotion_romance",
+            "world_rule",
+            "transition",
+            "climax_resolution"
+          ]
+        },
+        "event_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "cause": {
+          "type": "string"
+        },
+        "consequence": {
+          "type": "string"
+        },
+        "importance_to_main_plot": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "emotion_value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "shock_value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "relationship_impact": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "status_change": {
+          "type": "boolean"
+        },
+        "foreshadowing": {
+          "type": "boolean"
+        },
+        "payoff": {
+          "type": "boolean"
+        },
+        "must_keep": {
+          "type": "boolean"
+        },
+        "can_omit": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "scene_id": "scene_01",
+  "genre_guess": "power_growth",
+  "scene_function": "conflict",
+  "events": [
+    {
+      "event_id": "evt_01",
+      "event_group": "goal_progress",
+      "event_type": "suppression_and_reversal",
+      "title": "林凡遭围攻后反杀逼退赵虎",
+      "description": "林凡在宗门试炼中突遭赵虎等人围攻，被迫暴露部分隐藏实力，在重伤边缘强行反击，成功逼退赵虎，震惊全场。",
+      "participants": [
+        "林凡",
+        "赵虎",
+        "围观弟子"
+      ],
+      "cause": "赵虎等人早有预谋，意图在试炼中废掉林凡",
+      "consequence": "林凡虽重伤但未败，反而震慑对手与围观者，初步扭转弱势地位",
+      "importance_to_main_plot": 1,
+      "emotion_value": 1,
+      "shock_value": 1,
+      "relationship_impact": 1,
+      "status_change": true,
+      "foreshadowing": false,
+      "payoff": true,
+      "must_keep": true,
+      "can_omit": false
+    }
+  ]
+}

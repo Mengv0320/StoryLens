@@ -1,0 +1,30 @@
+{
+  "scene_id": "scene_02",
+  "genre_guess": "power_growth",
+  "scene_function": "reveal",
+  "events": [
+    {
+      "event_id": "event_02_01",
+      "event_group": "revelation",
+      "event_type": "conspiracy_reveal",
+      "title": "林凡识破高层阴谋",
+      "description": "林凡察觉周执事刻意纵容赵虎，意识到宗门高层有势力欲除掉自己。",
+      "participants": [
+        "林凡",
+        "周执事",
+        "赵虎"
+      ],
+      "cause": "周执事在试炼中偏袒赵虎且不制止其违规行为",
+      "consequence": "林凡决定主动调查，引幕后黑手现身，从被动转为主动",
+      "importance_to_main_plot": 1,
+      "emotion_value": 1,
+      "shock_value": 1,
+      "relationship_impact": 1,
+      "status_change": true,
+      "foreshadowing": true,
+      "payoff": false,
+      "must_keep": true,
+      "can_omit": false
+    }
+  ]
+}

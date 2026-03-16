@@ -1,0 +1,18 @@
+{"timestamp": "2026-03-16T16:39:40.789942+00:00", "event": "book_start", "chapter_count": 1, "chapters_per_episode": 5}
+{"timestamp": "2026-03-16T16:39:40.789942+00:00", "event": "chapter_start", "chapter_id": "chapter_001", "title": "Full Text"}
+{"timestamp": "2026-03-16T16:39:40.789942+00:00", "event": "excerpt_start", "text_length": 234}
+{"timestamp": "2026-03-16T16:39:46.472525+00:00", "event": "stage_complete", "stage": "genre"}
+{"timestamp": "2026-03-16T16:39:57.502306+00:00", "event": "stage_complete", "stage": "scene_split"}
+{"timestamp": "2026-03-16T16:40:20.041165+00:00", "event": "stage_complete", "stage": "scene_extraction"}
+{"timestamp": "2026-03-16T16:40:40.764925+00:00", "event": "stage_complete", "stage": "scene_extraction"}
+{"timestamp": "2026-03-16T16:40:50.649246+00:00", "event": "stage_complete", "stage": "normalized_events"}
+{"timestamp": "2026-03-16T16:41:08.794241+00:00", "event": "stage_complete", "stage": "scores"}
+{"timestamp": "2026-03-16T16:41:26.279873+00:00", "event": "stage_complete", "stage": "episode"}
+{"timestamp": "2026-03-16T16:41:26.280868+00:00", "event": "excerpt_complete", "scenes": 2, "events": 2}
+{"timestamp": "2026-03-16T16:41:26.280868+00:00", "event": "chapter_complete", "chapter_id": "chapter_001"}
+{"timestamp": "2026-03-16T16:41:26.281865+00:00", "event": "episode_plan_ready", "planned_episode_count": 1}
+{"timestamp": "2026-03-16T16:41:39.473195+00:00", "event": "stage_complete", "stage": "book_normalized_events"}
+{"timestamp": "2026-03-16T16:41:56.754550+00:00", "event": "stage_complete", "stage": "book_scores"}
+{"timestamp": "2026-03-16T16:42:11.473770+00:00", "event": "stage_complete", "stage": "book_episode"}
+{"timestamp": "2026-03-16T16:42:11.474276+00:00", "event": "episode_complete", "episode_id": "episode_001", "chapter_ids": ["chapter_001"]}
+{"timestamp": "2026-03-16T16:42:11.475813+00:00", "event": "book_complete", "episodes": 1}

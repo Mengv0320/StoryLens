@@ -1,0 +1,40 @@
+{
+  "events": [
+    {
+      "event_id": "nev_001",
+      "source_scene_ids": [
+        "scene_01"
+      ],
+      "event_group": "goal_progress",
+      "event_type": "suppression_and_reversal",
+      "title": "林凡遭围攻后反杀逼退赵虎",
+      "description": "林凡在宗门试炼中被赵虎等人突袭围攻，被迫暴露部分隐藏实力，在重伤边缘强行反击，成功逼退赵虎，震惊围观弟子。",
+      "characters": [
+        "林凡",
+        "赵虎",
+        "围观弟子"
+      ],
+      "cause": "赵虎等人早有预谋，在试炼开始时对林凡发动狠辣围攻",
+      "consequence": "林凡虽重伤但成功反击，暴露部分底牌，震慑众人并改变其在宗门中的处境",
+      "must_keep": true
+    },
+    {
+      "event_id": "nev_002",
+      "source_scene_ids": [
+        "scene_02"
+      ],
+      "event_group": "goal_progress",
+      "event_type": "revelation.hidden_enemy",
+      "title": "林凡识破宗门高层阴谋",
+      "description": "林凡察觉周执事纵容赵虎、刻意偏袒，意识到真正威胁来自宗门内部更高层势力。",
+      "characters": [
+        "林凡",
+        "周执事",
+        "赵虎"
+      ],
+      "cause": "周执事在试炼中不制止赵虎，反而在关键时刻偏袒",
+      "consequence": "林凡决定主动追查幕后黑手，从被动防御转为主动出击",
+      "must_keep": true
+    }
+  ]
+}

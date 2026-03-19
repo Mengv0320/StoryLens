@@ -1,9 +1,0 @@
-{"timestamp": "2026-03-16T16:35:53.894225+00:00", "event": "excerpt_start", "text_length": 235}
-{"timestamp": "2026-03-16T16:35:59.806223+00:00", "event": "stage_complete", "stage": "genre"}
-{"timestamp": "2026-03-16T16:36:17.754597+00:00", "event": "stage_complete", "stage": "scene_split"}
-{"timestamp": "2026-03-16T16:36:37.199854+00:00", "event": "stage_complete", "stage": "scene_extraction"}
-{"timestamp": "2026-03-16T16:36:55.527369+00:00", "event": "stage_complete", "stage": "scene_extraction"}
-{"timestamp": "2026-03-16T16:37:08.196363+00:00", "event": "stage_complete", "stage": "normalized_events"}
-{"timestamp": "2026-03-16T16:37:16.303549+00:00", "event": "stage_complete", "stage": "scores"}
-{"timestamp": "2026-03-16T16:37:30.743784+00:00", "event": "stage_complete", "stage": "episode"}
-{"timestamp": "2026-03-16T16:37:30.744799+00:00", "event": "excerpt_complete", "scenes": 2, "events": 2}

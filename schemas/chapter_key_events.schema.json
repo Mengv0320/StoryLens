@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ChapterKeyEvents",
+  "description": "Key events extracted directly at chapter level (lite pipeline)",
+  "type": "object",
+  "required": ["events"],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "event_type", "title", "description", "characters"],
+        "properties": {
+          "event_id": { "type": "string" },
+          "event_type": {
+            "type": "string",
+            "enum": ["conflict", "turning_point", "relationship_change", "status_change", "foreshadowing", "payoff"]
+          },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "characters": { "type": "array", "items": { "type": "string" } },
+          "cause": { "type": "string" },
+          "consequence": { "type": "string" },
+          "involves_protagonist": { "type": "boolean" },
+          "involves_identity_reveal": { "type": "boolean" },
+          "involves_faction_change": { "type": "boolean" },
+          "involves_death_or_breakthrough": { "type": "boolean" },
+          "involves_relationship_change": { "type": "boolean" },
+          "importance": { "type": "integer", "minimum": 1, "maximum": 5 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "chapter_summary": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -14,15 +14,7 @@
   "properties": {
     "primary_genre": {
       "type": "string",
-      "enum": [
-        "power_growth",
-        "political_intrigue",
-        "romance_relationship",
-        "adventure_survival",
-        "mystery_revelation",
-        "career_reversal",
-        "hybrid"
-      ]
+      "minLength": 1
     },
     "subgenre": {
       "type": "string",
@@ -32,15 +24,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": [
-          "power_growth",
-          "political_intrigue",
-          "romance_relationship",
-          "adventure_survival",
-          "mystery_revelation",
-          "career_reversal",
-          "hybrid"
-        ]
+        "minLength": 1
       },
       "uniqueItems": true
     },

@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f4f7fb;
+  --bg-elevated: #edf2f7;
+  --panel: #ffffff;
+  --panel-soft: #f8fafc;
+  --panel-muted: #f1f5f9;
+  --border: #d8e1ea;
+  --border-strong: #c3ced9;
+  --text: #16202a;
+  --text-soft: #5f6b7a;
+  --text-faint: #8a95a3;
+  --text-inverse: #ffffff;
+  --accent: #1967d2;
+  --accent-hover: #1557b0;
+  --accent-soft: #e8f0fe;
+  --success: #1f8f5f;
+  --success-soft: #eaf7f0;
+  --warning: #b7791f;
+  --warning-soft: #fff6e5;
+  --danger: #c53b3b;
+  --danger-soft: #fdecec;
+  --info: #3366cc;
+  --info-soft: #eef4ff;
+  --shadow-sm: 0 2px 8px rgba(16,24,40,0.04);
+  --shadow-md: 0 12px 28px rgba(16,24,40,0.08);
+  --shadow-lg: 0 22px 40px rgba(16,24,40,0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

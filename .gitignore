@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg
+*.egg-info/
+/dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# Environment
+.env
+
+# Runtime data
+data/*.log
+data/_*.txt
+data/debug_json/
+data/processed/
+data/exports/
+data/runs/
+data/cache/
+data/raw/
+
+# Node / GUI build
+node_modules/
+gui/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk

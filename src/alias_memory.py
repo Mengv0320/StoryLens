@@ -84,6 +84,10 @@ class CharacterAliasMemory:
             for canonical, aliases in sorted(self.canonical_to_aliases.items())
         }
 
+    def restore(self, data: dict[str, list[str]]) -> None:
+        """Restore alias state from a previous snapshot."""
+        self.canonical_to_aliases = {k: set(v) for k, v in data.items()}
+
     def _find_existing(self, name: str) -> str | None:
         for canonical, aliases in self.canonical_to_aliases.items():
             candidates = {canonical, *aliases}

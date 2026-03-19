@@ -31,6 +31,8 @@ Do not:
 2. use generic sequencing words to imitate structure
 3. omit the setup required for the climax to make sense
 4. mistake a temporary side action for the main plot
+
+Language: output all text fields (title, description, summary, cause, consequence, etc.) in Chinese. Keep only JSON keys and enum values in English.
 ```
 
 ## Scene Split Prompt
@@ -47,22 +49,24 @@ Split the input into narrative scenes using these cues:
 
 Requirements:
 1. output JSON only
-2. preserve the original text content for each scene in the `text` field
+2. use start_hint and end_hint to mark the boundaries of each scene (copy the first ~20 chars and last ~20 chars of the scene from the original text)
 3. keep each scene as a coherent unit rather than an arbitrary fixed-length chunk
 4. do not create tiny scenes unless a short scene contains a major reversal or reveal
 5. if the excerpt is already one coherent scene, return one scene
+6. do NOT include the full scene text in the output — the text field is not needed
+
+IMPORTANT: Every field below is REQUIRED. Do NOT omit any field, especially "location" — if the location is unclear, use "未知" (unknown).
 
 Output shape:
 {
   "scenes": [
     {
       "scene_id": "scene_01",
-      "start_hint": "...",
-      "end_hint": "...",
-      "location": "...",
+      "start_hint": "first ~20 chars of scene text...",
+      "end_hint": "last ~20 chars of scene text...",
+      "location": "where the scene takes place (REQUIRED, use '未知' if unclear)",
       "characters_present": ["..."],
-      "summary": "...",
-      "text": "..."
+      "summary": "..."
     }
   ]
 }
@@ -98,8 +102,8 @@ Output JSON only:
   "events": [
     {
       "event_id": "...",
-      "event_group": "...",
-      "event_type": "...",
+      "event_group": "one of: revelation|confrontation|relationship|power_change|status_shift|scheme|mission|training|worldbuilding",
+      "event_type": "group.subtype format, e.g. revelation.identity_reveal, confrontation.battle_outcome, relationship.alliance_formed, power_change.breakthrough, status_shift.rank_up, scheme.trap_sprung, mission.objective_change",
       "title": "...",
       "description": "...",
       "participants": ["..."],
@@ -117,6 +121,8 @@ Output JSON only:
     }
   ]
 }
+
+All text fields (title, description, cause, consequence) must be in Chinese. Keep only JSON keys and enum values in English.
 
 Text:
 {{text}}
@@ -274,20 +280,30 @@ Keep the emphasis on:
 ```text
 You are a Chinese web novel adaptation editor. Score which events deserve inclusion in an animation-style episode summary.
 
-Scoring dimensions:
-1. main_plot_score
-2. character_relation_score
-3. status_shift_score
-4. climax_score
-5. suspense_score
-6. genre_value_score
+All scores use a 1-5 integer scale with the following anchors:
+- 1: no relevance to this dimension (filler, repeated, or purely atmospheric)
+- 2: minor relevance (background setup, low-impact side action)
+- 3: moderate relevance (advances a subplot, minor relationship shift, partial reveal)
+- 4: high relevance (main plot turning point, major relationship change, significant power shift)
+- 5: critical (story-defining climax, irreversible status change, core identity reveal)
 
-Principles:
-- events that change the situation score high
-- repeated rendering of the same outcome scores low
-- outcomes score higher than process
-- taunting scores low, stance change scores high
-- daily scenes score low unless they cause later change
+Scoring dimensions:
+1. main_plot_score — how much this event advances or redirects the protagonist's primary goal or situation
+2. character_relation_score — how much this event changes relationships (alliance, betrayal, romance, rivalry, trust)
+3. status_shift_score — how much this event changes power, rank, faction standing, resources, or reputation
+4. climax_score — how strong the dramatic peak is (reversal, payoff, face-slap, confession, reveal)
+5. suspense_score — how much this event creates or resolves tension, foreshadowing, or cliffhanger
+6. genre_value_score — how well this event delivers the core appeal of its genre (e.g. power fantasy payoff for xianxia, scheme resolution for palace intrigue, intimacy escalation for romance)
+
+Scoring principles:
+- events that change the situation score high; events that merely describe it score low
+- repeated rendering of the same outcome scores low even if individually dramatic
+- outcomes score higher than process (battle result > battle choreography)
+- taunting and mockery score low; stance change and reversal score high
+- daily scenes score low unless they directly cause later change
+- must_keep = true when any single dimension >= 4 or average across all dimensions >= 3
+
+IMPORTANT: Every field below is REQUIRED for EVERY event. Do NOT omit "must_keep" or "keep_reason" on any event.
 
 Output:
 {
@@ -301,7 +317,7 @@ Output:
       "suspense_score": 1,
       "genre_value_score": 1,
       "must_keep": true,
-      "keep_reason": "..."
+      "keep_reason": "reason why this event must be kept (REQUIRED)"
     }
   ]
 }
@@ -313,18 +329,25 @@ Output:
 You are a story knowledge-base editor. Normalize events extracted from multiple scenes.
 
 Tasks:
-1. merge aliases that clearly refer to the same character
+1. merge aliases that clearly refer to the same character (same person with different names, titles, or pronouns)
 2. merge duplicate or near-duplicate events that represent the same story node
 3. preserve story order implicitly through the merged event list
 4. keep cause and consequence concise
 5. keep only one canonical event for repeated mentions of the same plot turn
 
+Merge criteria — two events should be merged when ALL of the following are true:
+- they describe the same plot outcome (not just the same topic)
+- they involve the same core participants
+- merging them does not lose a distinct cause or consequence
+If in doubt, keep them separate. Over-merging loses information; under-merging is recoverable downstream.
+
 Rules:
 1. do not invent facts not supported by the input
 2. if identity is uncertain, do not force a merge
 3. favor state changes over action details
-4. preserve events marked as important even if you compress their wording
+4. preserve events marked as must_keep even if you compress their wording
 5. output JSON only
+6. all text fields (title, description, cause, consequence) must be in Chinese
 
 Output shape:
 {
@@ -368,6 +391,7 @@ Requirements:
 5. write like an animation synopsis, not reading notes
 6. focus on the strongest main line, not every side branch
 7. organize by dramatic rhythm rather than chapter order
+8. all text fields (title, core_theme, hook, main_conflict, key_events, climax, ending_hook, episode_summary) must be in Chinese
 
 Output JSON:
 {

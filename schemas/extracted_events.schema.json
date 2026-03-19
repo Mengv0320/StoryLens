@@ -21,15 +21,7 @@
     },
     "scene_function": {
       "type": "string",
-      "enum": [
-        "setup",
-        "transition",
-        "conflict",
-        "reveal",
-        "relationship_push",
-        "power_shift",
-        "climax"
-      ]
+      "minLength": 1
     },
     "events": {
       "type": "array",
@@ -68,20 +60,7 @@
         },
         "event_group": {
           "type": "string",
-          "enum": [
-            "setup",
-            "goal_progress",
-            "conflict",
-            "revelation",
-            "relationship",
-            "status_shift",
-            "resource_gain_loss",
-            "scheme_intrigue",
-            "emotion_romance",
-            "world_rule",
-            "transition",
-            "climax_resolution"
-          ]
+          "minLength": 1
         },
         "event_type": {
           "type": "string",

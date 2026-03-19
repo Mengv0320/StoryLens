@@ -1,91 +1,149 @@
-# Web Novel Extraction MVP
+# Web Novel Extraction Pipeline (网文提取管线)
 
-This workspace now contains the minimum structure for a novel-to-episode extraction pipeline:
+Dual-mode pipeline for extracting structured story data from Chinese web novels. Python 3.10+, sole external dependency is the `openai` SDK.
 
-- `prompts/`: prompt banks and taxonomies
-- `schemas/`: JSON schemas for major outputs
-- `src/`: a Python skeleton for genre classification, event extraction, scoring, and episode building
-- `data/examples/`: sample input text
+Supports OpenAI-compatible and Anthropic-compatible API endpoints. Includes a React/TypeScript GUI frontend and a built-in API server.
 
-## Current Status
+## Modes
 
-The pipeline now includes a concrete OpenAI-compatible adapter for the locally installed `openai` package.
+### fast_scan (default)
 
-- `src/stages.py` defines `LLMClient`
-- `OpenAILLMClient` uses `chat.completions.create()` with JSON output, which is friendlier to OpenAI-compatible gateways such as iFlow
-- `src/schema_validator.py` performs local shape validation without extra dependencies
-- you can still replace it with Anthropic or a local model adapter later
+9-step pipeline for quick book overviews, designed for long novels (hundreds of chapters):
 
-## Files
+1. Chapter split
+2. Rule-based tagging (keyword matching, importance scoring)
+3. Coverage check
+4. Segment grouping (~30 chapters/segment)
+5. Segment summary (LLM)
+6. Key chapter selection (rules + LLM, max 15%)
+7. Key chapter summary (LLM)
+8. Book overview (LLM)
+9. Reading guide (LLM)
 
-- `prompts/novel_genre_taxonomy.md`
-- `prompts/event_type_taxonomy.md`
-- `prompts/webnovel_prompts.md`
-- `schemas/genre_classification.schema.json`
-- `schemas/scene_split.schema.json`
-- `schemas/extracted_events.schema.json`
-- `schemas/normalized_events.schema.json`
-- `schemas/event_scores.schema.json`
-- `schemas/episode_summary.schema.json`
-- `src/pipeline.py`
-- `src/schema_validator.py`
-- `.env.example`
-- `data/examples/sample_excerpt.txt`
+Per-item caching: segment summaries and key chapter summaries are cached individually. Failed items can be retried without re-running the whole book.
+
+### deep_analysis
+
+Full 7-stage LLM pipeline:
+
+1. Genre classification
+2. Scene splitting
+3. Per-scene event extraction
+4. Cross-scene event normalization
+5. Causal analysis
+6. Event scoring
+7. Episode summary generation
+
+In book mode: chapter split → per-chapter pipeline → knowledge update → episode planning → episode-level stages.
+
+Cross-chapter state tracked by CausalEngine (foreshadowing/causal chains), KnowledgeManager (characters/factions/world/timeline), and CharacterTracker (cards/relationships).
+
+## Cache System
+
+- Book-level cache at `data/cache/books/<book_hash>/`
+- Cache key: `{book_fingerprint}:{model}:v{pipeline_version}`
+- Same book + same model = cache hit across runs
+- Prompt/schema/version changes auto-invalidate
+- Failed items only re-run on retry, successful items reused
+
+## Project Structure
+
+```
+src/           Python backend (pipeline, stages, fast_scan modules, API server)
+gui/           React frontend (TypeScript, Vite)
+prompts/       LLM prompt templates
+schemas/       JSON Schema definitions (9 schemas)
+data/          Runtime data (gitignored)
+  cache/       Book-level model cache
+  runs/        Per-run state and artifacts
+  raw/         Sample input data
+  exports/     Export outputs
+docs/          Project documentation
+```
 
 ## Usage
 
-Copy `.env.example` to `.env` and fill in your API key.
-
-Then run:
+### Setup
 
 ```bash
-python -m src.main data/examples/sample_excerpt.txt --output data/processed/output.json
+cp .env.example .env
+# Fill in OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL
 ```
 
-Optional flags:
+### CLI — Fast Scan (default)
 
 ```bash
-python -m src.main data/examples/sample_excerpt.txt --model gpt-4.1-mini
-python -m src.main data/examples/sample_excerpt.txt --env-file .env
-python -m src.main novel.txt --mode book --output data/runs/run_001 --chapters-per-episode 5
-python -m src.main novel.txt --mode book --output data/runs/run_001 --no-cache
+python -m src.main input.txt --mode fast_scan --output data/processed/output.json
 ```
 
-Environment variables:
+### CLI — Deep Analysis
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_BASE_URL`
-
-For iFlow, a typical setup is:
-
-```env
-OPENAI_API_KEY=...
-OPENAI_MODEL=qwen3-max
-OPENAI_BASE_URL=https://apis.iflow.cn/v1
+```bash
+python -m src.main input.txt --mode book --output data/runs/run_001
+python -m src.main input.txt --mode deep_analysis --output data/runs/run_001
 ```
 
-## Next Step
+### CLI — Batch
 
-The pipeline now runs:
+```bash
+python -m src.main --input-dir data/raw/ --glob "*.txt" --mode book --output data/runs/
+```
 
-1. genre classification
-2. scene splitting
-3. per-scene event extraction
-4. cross-scene event normalization
-5. event scoring
-6. episode summary generation
+### CLI — Resume
 
-For batch runs, the CLI now writes:
+```bash
+python -m src.main input.txt --resume data/runs/run_001
+```
 
-- `cache/`: per-stage reusable results
-- `artifacts/chapters/`: per-chapter intermediate outputs
-- `artifacts/episodes/`: per-episode intermediate outputs
-- `artifacts/failures/`: failed chapter or episode records
-- `artifacts/aliases.json`: accumulated character alias memory
-- `artifacts/episode_plan.json`: anime-style episode planning table
-- `logs/run.jsonl`: append-only stage log
+### CLI — Crawl
 
-This makes reruns much cheaper and lets you resume long jobs without recomputing finished stages.
+```bash
+python -m src.main --crawl-url https://example.com/novel/ --output data/raw/novel.txt
+python -m src.main --crawl-url https://example.com/novel/ --chapter-start 1 --chapter-end 50 --output data/raw/selection.txt
+python -m src.main --crawl-url https://example.com/novel/ --list-chapters
+```
 
-Book mode now uses chapter boundaries plus high `climax/suspense` chapters as soft cut points, instead of blindly grouping every fixed `N` chapters into one episode.
+### GUI
+
+```bash
+python -m src.api_server    # Backend on http://127.0.0.1:8765
+cd gui && npm run dev        # Frontend on http://localhost:5173
+```
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `OPENAI_API_KEY` | Required. API key for the primary provider. |
+| `OPENAI_MODEL` | Model name. Default: `gpt-4.1-mini` |
+| `OPENAI_BASE_URL` | Base URL for OpenAI-compatible endpoints |
+| `OPENAI_TYPE` | `openai` (default) or `anthropic` |
+| `OPENAI_API_KEY_2` | Secondary provider API key (failover) |
+| `OPENAI_BASE_URL_2` | Secondary provider base URL |
+| `OPENAI_MODEL_2` | Secondary provider model |
+| `OPENAI_TYPE_2` | Secondary provider type: `openai` or `anthropic` |
+| `GENRE_MODEL` | Per-stage override: genre classification |
+| `EXTRACTION_MODEL` | Per-stage override: scene split + extraction |
+| `ANALYSIS_MODEL` | Per-stage override: normalization + scoring |
+| `SUMMARY_MODEL` | Per-stage override: episode summary |
+| `*_BASE_URL` | Corresponding base URL for each per-stage model |
+
+## Key CLI Flags
+
+| Flag | Description |
+|---|---|
+| `--mode {excerpt,book,fast_scan,deep_analysis}` | Run mode (`fast_scan` default) |
+| `--no-cache` | Disable on-disk caching |
+| `--chapters-per-episode N` | Chapter grouping for book/deep_analysis (default: 5) |
+| `--split-strategy {v1,v2}` | Episode split: v1 (threshold) or v2 (climax-aware, default) |
+| `--skip-quality` | Skip quality assessment |
+| `--export-format {json,markdown,csv,api}` | Additional export format |
+| `--resume RUN_DIR` | Resume a previous run |
+| `--input-dir DIR` | Batch mode: process all files in directory |
+| `--glob PATTERN` | File pattern for batch mode (default: `*.txt`) |
+| `--crawl-url URL` | Crawl a web novel index page |
+| `--chapter-start N` / `--chapter-end N` | Select chapter range for crawl |
+| `--list-chapters` | Print chapter list from crawl, then exit |
+| `--crawl-encoding ENC` | Force encoding for crawl (e.g. `gbk`) |
+| `--price-per-1m-prompt N` | Cost estimation: price per 1M prompt tokens (USD) |
+| `--price-per-1m-completion N` | Cost estimation: price per 1M completion tokens (USD) |

@@ -1,23 +1,6 @@
 // --- Run ---
 export type RunStatus = "idle" | "running" | "completed" | "failed";
 
-export type RunSummary = {
-  runId: string;
-  projectName: string;
-  inputName: string;
-  model: string;
-  status: RunStatus;
-  chapterCount: number;
-  sceneCount: number;
-  eventCount: number;
-  characterCount: number;
-  episodeCount: number;
-  failureCount: number;
-  outputDir: string;
-  startedAt?: string;
-  updatedAt?: string;
-};
-
 // --- Progress ---
 export type ProgressSnapshot = {
   currentStage: string;
@@ -26,44 +9,6 @@ export type ProgressSnapshot = {
   totalChapters: number;
   cacheHits: number;
   failedCount: number;
-};
-
-// --- Episode ---
-export type EpisodeListItem = {
-  id: string;
-  indexLabel: string;
-  title: string;
-  chapterRangeLabel: string;
-  status: "completed" | "failed" | "warning";
-};
-
-export type EpisodeDetail = {
-  id: string;
-  title: string;
-  chapterIds: string[];
-  chapterTitles: string[];
-  chapterRangeLabel: string;
-  coreTheme: string;
-  hook: string;
-  mainConflict: string;
-  keyEvents: string[];
-  climax: string;
-  endingHook: string;
-  summary: string;
-  characterIds?: string[];
-  eventCount?: number;
-  riskLevel?: "low" | "medium" | "high";
-};
-
-export type EpisodePlanItem = {
-  id: string;
-  title: string;
-  chapterIds: string[];
-  chapterRangeLabel: string;
-  coreTheme: string;
-  mainConflict: string;
-  climax: string;
-  endingHook: string;
 };
 
 // --- Character ---
@@ -107,47 +52,21 @@ export type TimelineItem = {
   summary: string;
 };
 
-// --- Task ---
-export type TaskConfig = {
-  inputPath: string;
-  outputPath: string;
-  model: string;
-  episodeStrategy: "dynamic" | "fixed";
-  targetChaptersPerEpisode: number;
-  useCache: boolean;
-  useCharacterMemory: boolean;
-  useQualityCheck: boolean;
-};
-
-export type TaskRuntime = {
-  status: RunStatus;
-  currentStage: string;
-  currentChapter?: string;
-  completedChapters: number;
-  totalChapters: number;
-  cacheHits: number;
-  failures: number;
-  tokenUsage?: number;
-  averageLatencyMs?: number;
-};
-
 // --- Log ---
 export type LogItem = {
   timestamp: string;
   event: string;
   stage?: string;
   chapterId?: string;
-  episodeId?: string;
   errorType?: string;
   error?: string;
 };
 
 // --- Failure ---
 export type FailureItem = {
-  type: "chapter" | "episode";
+  type: string;
   id: string;
   title?: string;
-  chapterIds?: string[];
   errorType: string;
   error: string;
 };
@@ -160,88 +79,6 @@ export type ExportItem = {
   path: string;
   exists: boolean;
   description: string;
-};
-
-// --- Dashboard ---
-export type DashboardData = {
-  summary: RunSummary;
-  latestEpisodes: EpisodeListItem[];
-  latestFailures: FailureItem[];
-  progress: ProgressSnapshot;
-  recentLogs: LogItem[];
-};
-
-// --- Fast Scan ---
-export type ScanOverview = {
-  title: string;
-  totalChapters: number;
-  totalWords: number;
-  mainPlotline: string;
-  keyStages: string[];
-  coreCharacters: string[];
-  openQuestions: string[];
-  completeness: number;
-};
-
-export type ScanSegment = {
-  segmentId: string;
-  chapterIds: string[];
-  chapterRange: string;
-  candidateChapters: string[];
-  estimatedPriority: string;
-  summary: string;
-  mainPlot: string;
-  keyCharacters: string[];
-  mustReadChapters: string[];
-  skippableRanges: string[];
-  openThreads: string[];
-  status: "completed" | "failed" | "pending";
-  error?: string;
-};
-
-export type ScanKeyChapter = {
-  chapterId: string;
-  importanceLevel: string;
-  summary: string;
-  whyItMatters: string;
-  relatedCharacters: string[];
-  relatedThreads: string[];
-  status: "completed" | "failed";
-  error?: string;
-};
-
-export type ScanReadingGuide = {
-  mustReadChapters: string[];
-  skippableRanges: string[];
-  readingOrderSuggestion: string;
-  estimatedEssentialRatio: number;
-  summaryByStage: Array<{
-    stage: string;
-    chapters: string;
-    summary: string;
-  }>;
-};
-
-export type ScanChapterIndex = {
-  chapterId: string;
-  title: string;
-  wordCount: number;
-  featureTags: string[];
-  importanceScore: number;
-  candidateReason: string;
-  isCandidate: boolean;
-};
-
-export type ScanStats = {
-  totalChapters: number;
-  totalSegments: number;
-  segmentsCompleted: number;
-  segmentsFailed: number;
-  keyChaptersCount: number;
-  keyChaptersCompleted: number;
-  keyChaptersFailed: number;
-  elapsedSeconds: number;
-  modelCalls: number;
 };
 
 // --- Standard Analysis ---
@@ -298,4 +135,18 @@ export type StandardAnalysisResult = {
     estimatedCostUsd: number;
     cacheHits: number;
   };
+};
+
+// --- Dashboard (standard_analysis) ---
+export type DashboardSummary = {
+  status: string;
+  chapterCount: number;
+  failureCount: number;
+  modelCalls: number;
+};
+
+export type DashboardData = {
+  summary: DashboardSummary;
+  progress: ProgressSnapshot;
+  latestFailures: FailureItem[];
 };

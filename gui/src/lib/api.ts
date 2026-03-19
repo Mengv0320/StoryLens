@@ -1,9 +1,7 @@
 import type {
-  ProgressSnapshot, DashboardData, RunSummary,
-  EpisodeListItem, EpisodeDetail, EpisodePlanItem,
+  ProgressSnapshot, DashboardData,
   CharacterListItem, CharacterDetail, TimelineItem,
   ExportItem, FailureItem, LogItem,
-  ScanOverview, ScanSegment, ScanKeyChapter, ScanReadingGuide, ScanChapterIndex, ScanStats,
   StandardAnalysisResult,
 } from "./types";
 
@@ -62,20 +60,14 @@ export const api = {
     inputPath: string;
     outputDir?: string;
     model?: string;
-    chaptersPerEpisode?: number;
-    splitStrategy?: string;
-    skipQuality?: boolean;
-    useCache?: boolean;
-    mode?: "fast_scan" | "deep_analysis" | "standard_analysis";
+    mode?: "standard_analysis";
   }) => postJson<{ runId: string; status: string }>("/api/pipeline/start", config),
   getPipelineStatus: () => getJson<PipelineStatusResponse>("/api/pipeline/status"),
 
-  // Results
+  // Dashboard
   getDashboard: () => getJson<DashboardData>("/api/results/dashboard"),
-  getSummary: () => getJson<RunSummary>("/api/results/summary"),
-  getEpisodes: () => getJson<EpisodeListItem[]>("/api/results/episodes"),
-  getEpisodeDetail: (id: string) => getJson<EpisodeDetail>(`/api/results/episodes/${id}`),
-  getEpisodePlan: () => getJson<EpisodePlanItem[]>("/api/results/episode-plan"),
+
+  // Results
   getCharacters: () => getJson<CharacterListItem[]>("/api/results/characters"),
   getCharacterDetail: (id: string) => getJson<CharacterDetail>(`/api/results/characters/${id}`),
   getTimeline: () => getJson<TimelineItem[]>("/api/results/timeline"),
@@ -83,16 +75,6 @@ export const api = {
   getFailures: () => getJson<FailureItem[]>("/api/results/failures"),
   getLogs: () => getJson<LogItem[]>("/api/results/logs"),
   getSettings: () => getJson<Record<string, unknown>>("/api/settings"),
-
-  // Scan (fast_scan mode)
-  getScanOverview: () => getJson<ScanOverview>("/api/scan/overview"),
-  getScanSegments: () => getJson<ScanSegment[]>("/api/scan/segments"),
-  getScanSegmentDetail: (id: string) => getJson<ScanSegment>(`/api/scan/segments/${id}`),
-  getScanKeyChapters: () => getJson<ScanKeyChapter[]>("/api/scan/key-chapters"),
-  getScanReadingGuide: () => getJson<ScanReadingGuide>("/api/scan/reading-guide"),
-  getScanChapterIndex: () => getJson<ScanChapterIndex[]>("/api/scan/chapter-index"),
-  getScanStats: () => getJson<ScanStats>("/api/scan/stats"),
-  retryMissing: (type: "segments" | "key_chapters") => postJson<{ status: string; retried: number }>("/api/pipeline/retry", { type }),
 
   // Standard Analysis
   getStandardAnalysis: () => getJson<StandardAnalysisResult>("/api/results/standard-analysis"),

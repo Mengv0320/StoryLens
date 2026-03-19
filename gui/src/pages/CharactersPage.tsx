@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
-import { useRunMode } from "../lib/useRunMode";
 import type { CharacterDetail } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
-import FastScanNotice from "../components/FastScanNotice";
 
 const relVariant: Record<string, "danger" | "warning" | "success" | "info" | "accent" | "default"> = {
   hostile: "danger", suspicious: "warning", allied: "success",
@@ -13,7 +11,6 @@ const relVariant: Record<string, "danger" | "warning" | "success" | "info" | "ac
 };
 
 export default function CharactersPage() {
-  const mode = useRunMode();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CharacterDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -30,15 +27,6 @@ export default function CharactersPage() {
       .finally(() => { if (!cancelled) setDetailLoading(false); });
     return () => { cancelled = true; };
   }, [selectedId]);
-
-  if (mode === "fast_scan") {
-    return (
-      <div className="p-6 space-y-5">
-        <h1 className="text-2xl font-semibold text-txt">角色</h1>
-        <FastScanNotice />
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 space-y-5">
@@ -69,7 +57,6 @@ export default function CharactersPage() {
           </Card>
         </div>
 
-        {/* Right column - detail */}
         <div className="md:col-span-2">
           <Card>
             <SectionHeader title="角色详情" />

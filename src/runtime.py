@@ -198,3 +198,18 @@ def load_state_checkpoint(run_dir: Path) -> dict[str, Any] | None:
             f"Checkpoint version mismatch: expected 2, got {data.get('version')} in {path}"
         )
     return data
+
+
+# ── Serialization helpers (relocated from pipeline.py) ──────────────────────
+
+def save_json(data: dict[str, object], output_path: str | Path) -> None:
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def save_jsonl(items: list[dict[str, object]], output_path: str | Path) -> None:
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = "\n".join(json.dumps(item, ensure_ascii=False) for item in items)
+    path.write_text(content, encoding="utf-8")

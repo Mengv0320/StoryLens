@@ -1,6 +1,6 @@
 """Standard analysis mode: Genre -> Chapter split -> Key event extraction (LLM) -> Rule scoring -> Output.
 
-Lighter than deep_analysis (book mode). Skips scene_split, full scene_extraction,
+Standard analysis mode. Genre classification, chapter splitting, per-chapter key event extraction,
 causal_analysis, and episode generation.
 """
 from __future__ import annotations

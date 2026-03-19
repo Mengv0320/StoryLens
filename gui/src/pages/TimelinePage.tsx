@@ -1,13 +1,10 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
-import { useRunMode } from "../lib/useRunMode";
 import type { TimelineItem } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
-import FastScanNotice from "../components/FastScanNotice";
 
 export default function TimelinePage() {
-  const mode = useRunMode();
   const { data: items } = usePolling(() => api.getTimeline(), 10_000);
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -16,20 +13,10 @@ export default function TimelinePage() {
   const groups = [...new Set(items?.map(i => i.eventGroup) ?? [])];
   const selected = filtered.find(i => i.id === selectedId) ?? null;
 
-  if (mode === "fast_scan") {
-    return (
-      <div className="p-6 space-y-5">
-        <h1 className="text-2xl font-semibold text-txt">时间线</h1>
-        <FastScanNotice />
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">时间线</h1>
 
-      {/* Filter bar */}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setFilter("")}
@@ -49,7 +36,6 @@ export default function TimelinePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* List */}
         <div className="md:col-span-2">
           <Card>
             <SectionHeader title="事件列表" />
@@ -80,7 +66,6 @@ export default function TimelinePage() {
           </Card>
         </div>
 
-        {/* Detail sidebar */}
         <div className="md:col-span-1">
           <Card>
             <SectionHeader title="事件详情" />

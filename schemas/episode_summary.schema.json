@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/episode_summary.schema.json",
   "title": "EpisodeSummary",
   "type": "object",
   "additionalProperties": false,

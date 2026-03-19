@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "NarrativeSummary",
   "description": "分组叙事摘要，包含剧情推进、伏笔追踪、角色弧线和因果链",
   "type": "object",

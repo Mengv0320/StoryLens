@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NarrativeSummary",
+  "description": "分组叙事摘要，包含剧情推进、伏笔追踪、角色弧线和因果链",
+  "type": "object",
+  "required": ["plot_progress", "new_foreshadowing", "resolved_foreshadowing", "open_questions", "subplot_threads", "character_arcs", "key_causality", "tension_level"],
+  "additionalProperties": false,
+  "properties": {
+    "plot_progress": {
+      "type": "string",
+      "description": "本组剧情推进概要（100-200字）"
+    },
+    "new_foreshadowing": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "本组新埋的伏笔"
+    },
+    "resolved_foreshadowing": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "本组回收的伏笔"
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "本组遗留悬念"
+    },
+    "subplot_threads": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "当前活跃的支线名称"
+    },
+    "character_arcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "development"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "角色名" },
+          "development": { "type": "string", "description": "本组中该角色的变化/成长" }
+        }
+      },
+      "description": "本组有明显变化的角色弧线"
+    },
+    "key_causality": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cause", "effect"],
+        "additionalProperties": false,
+        "properties": {
+          "cause": { "type": "string", "description": "因（事件/决定）" },
+          "effect": { "type": "string", "description": "果（导致的结果）" }
+        }
+      },
+      "description": "本组最重要的因果链（1-3条）"
+    },
+    "tension_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "紧张度：1=平淡过渡 2=铺垫蓄力 3=稳步推进 4=高潮迭起 5=核心转折"
+    }
+  }
+}

@@ -99,6 +99,33 @@ def main() -> None:
 
     save_json(result, run_paths.output_dir / "standard_output.json")
 
+    # --- Narrative analysis ---
+    ok_chapters = [ch for ch in result.get("chapters", []) if ch.get("status") == "ok"]
+    genre_dict = result.get("genre", {})
+    if ok_chapters:
+        try:
+            from .narrative_analyzer import run_narrative_analysis
+            from .config import Paths
+            from .schema_validator import SchemaValidator
+            paths = Paths.discover()
+            validator = SchemaValidator(paths.schemas_dir)
+            narrative_result = run_narrative_analysis(
+                chapter_results=ok_chapters,
+                genre=genre_dict,
+                client=default_client,
+                paths=paths,
+                validator=validator,
+                cache=cache,
+                logger=logger,
+                stats=stats,
+            )
+            save_json(narrative_result.to_dict(), run_paths.output_dir / "narrative_output.json")
+            n_groups = len(narrative_result.group_summaries)
+            has_synthesis = narrative_result.book_synthesis is not None
+            print(f"Narrative analysis complete: {n_groups} groups, synthesis={'yes' if has_synthesis else 'no'}")
+        except Exception as exc:
+            print(f"Narrative analysis failed (non-fatal): {exc}")
+
     ch_total = len(result.get("chapters", []))
     ch_ok = sum(1 for c in result.get("chapters", []) if c.get("status") == "ok")
     print(f"Standard analysis complete -> {run_paths.output_dir}")

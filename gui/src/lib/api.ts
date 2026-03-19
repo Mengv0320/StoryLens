@@ -3,6 +3,7 @@ import type {
   CharacterListItem, CharacterDetail, TimelineItem,
   ExportItem, FailureItem, LogItem,
   StandardAnalysisResult,
+  NarrativeResult, GroupSummary, BookSynthesis,
 } from "./types";
 
 const BASE = "";
@@ -78,4 +79,9 @@ export const api = {
 
   // Standard Analysis
   getStandardAnalysis: () => getJson<StandardAnalysisResult>("/api/results/standard-analysis"),
+
+  // Narrative Analysis
+  getNarrative: () => getJson<NarrativeResult>("/api/results/narrative"),
+  getNarrativeGroups: () => getJson<GroupSummary[]>("/api/results/narrative/groups"),
+  getNarrativeSynthesis: () => getJson<BookSynthesis>("/api/results/narrative/synthesis"),
 };

@@ -150,3 +150,69 @@ export type DashboardData = {
   progress: ProgressSnapshot;
   latestFailures: FailureItem[];
 };
+
+// --- Narrative Analysis ---
+export type NarrativeCharacterArc = {
+  name: string;
+  development: string;
+};
+
+export type NarrativeCausality = {
+  cause: string;
+  effect: string;
+};
+
+export type GroupSummary = {
+  groupId: string;
+  chapterRange: string;
+  chapterIds: string[];
+  plotProgress: string;
+  newForeshadowing: string[];
+  resolvedForeshadowing: string[];
+  openQuestions: string[];
+  subplotThreads: string[];
+  characterArcs: NarrativeCharacterArc[];
+  keyCausality: NarrativeCausality[];
+  tensionLevel: number;
+};
+
+export type SubplotSummary = {
+  thread: string;
+  summary: string;
+  status: "active" | "resolved" | string;
+};
+
+export type ForeshadowingItem = {
+  setup: string;
+  setupGroup: string;
+  resolvedGroup: string | null;
+};
+
+export type BookCharacterArc = {
+  name: string;
+  arcSummary: string;
+  keyMoments: string[];
+};
+
+export type TensionPoint = {
+  groupId: string;
+  level: number;
+  reason: string;
+};
+
+export type BookSynthesis = {
+  title: string;
+  mainPlotline: string;
+  subplotSummary: SubplotSummary[];
+  foreshadowingTracker: ForeshadowingItem[];
+  characterArcs: BookCharacterArc[];
+  tensionCurve: TensionPoint[];
+  themes: string[];
+  openQuestions: string[];
+  qualityNotes: string[];
+};
+
+export type NarrativeResult = {
+  groupSummaries: GroupSummary[];
+  bookSynthesis: BookSynthesis | null;
+};

@@ -7,6 +7,7 @@ import TimelinePage from "./pages/TimelinePage";
 import ExportsPage from "./pages/ExportsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ChapterAnalysisPage from "./pages/ChapterAnalysisPage";
+import NarrativePage from "./pages/NarrativePage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/exports" element={<ExportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/chapter-analysis" element={<ChapterAnalysisPage />} />
+          <Route path="/narrative" element={<NarrativePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ListChecks, FileText, Users, Clock, Download, Settings } from "lucide-react";
+import { LayoutDashboard, ListChecks, FileText, BookOpen, Users, Clock, Download, Settings } from "lucide-react";
 
 const navItems = [
   { to: "/dashboard", label: "仪表盘", icon: LayoutDashboard },
   { to: "/tasks", label: "任务", icon: ListChecks },
   { to: "/chapter-analysis", label: "章节分析", icon: FileText },
+  { to: "/narrative", label: "叙事分析", icon: BookOpen },
   { to: "/characters", label: "角色", icon: Users },
   { to: "/timeline", label: "时间线", icon: Clock },
   { to: "/exports", label: "导出", icon: Download },

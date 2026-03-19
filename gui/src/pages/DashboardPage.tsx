@@ -1,8 +1,9 @@
 import { useCallback } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { PipelineStatusResponse } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
-import type { DashboardData } from "../lib/types";
+import type { DashboardData, NarrativeResult } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
 
 export default function DashboardPage() {
@@ -15,6 +16,10 @@ export default function DashboardPage() {
   const dashEnabled = !!status && pipelineStatus !== "idle";
   const dashFetcher = useCallback(() => api.getDashboard(), []);
   const { data: dash, loading: dashLoading } = usePolling<DashboardData>(dashFetcher, dashInterval, dashEnabled);
+
+  const narrativeFetcher = useCallback(() => api.getNarrative(), []);
+  const narrativeEnabled = !!status && pipelineStatus === "completed";
+  const { data: narrative } = usePolling<NarrativeResult>(narrativeFetcher, 30_000, narrativeEnabled);
 
   if (!status || (pipelineStatus === "idle" && !dash)) {
     return (
@@ -98,6 +103,20 @@ export default function DashboardPage() {
                 <div className="mt-1 text-txt-soft">{f.error}</div>
               </div>
             ))}
+          </div>
+        </Card>
+      )}
+
+      {narrative && narrative.bookSynthesis && (
+        <Card>
+          <SectionHeader title="叙事分析" extra={<Badge label={`${narrative.groupSummaries?.length ?? 0} 组`} variant="accent" />} />
+          <div className="space-y-2 text-sm">
+            <KeyValue label="书名" value={narrative.bookSynthesis.title} />
+            <KeyValue label="主题" value={narrative.bookSynthesis.themes?.join("、") || "-"} />
+            <KeyValue label="未解悬念" value={narrative.bookSynthesis.openQuestions?.length ?? 0} />
+            <Link to="/narrative" className="inline-block mt-2 text-sm text-accent hover:underline">
+              查看完整叙事分析 →
+            </Link>
           </div>
         </Card>
       )}

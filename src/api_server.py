@@ -330,6 +330,32 @@ class RunManager:
                 stats=sa_stats,
             )
             save_json(result, Path(st.output_dir) / "standard_output.json")
+
+            # --- Narrative analysis (Layer 1 + Layer 2) ---
+            try:
+                from .narrative_analyzer import run_narrative_analysis
+                from .config import Paths
+                from .schema_validator import SchemaValidator
+                paths = Paths.discover()
+                validator = SchemaValidator(paths.schemas_dir)
+                ok_chapters = [ch for ch in result.get("chapters", []) if ch.get("status") == "ok"]
+                genre_dict = result.get("genre", {})
+                if ok_chapters:
+                    narrative_result = run_narrative_analysis(
+                        chapter_results=ok_chapters,
+                        genre=genre_dict,
+                        client=client,
+                        paths=paths,
+                        validator=validator,
+                        cache=cache,
+                        logger=run_log,
+                        stats=sa_stats,
+                    )
+                    save_json(narrative_result.to_dict(), Path(st.output_dir) / "narrative_output.json")
+                    logger.info("Narrative analysis completed: run_id=%s", st.run_id)
+            except Exception:
+                logger.exception("Narrative analysis failed (non-fatal)")
+
             with self._lock:
                 self._state.status = "completed"
                 self._state.updated_at = _utc_now()
@@ -503,6 +529,20 @@ def _read_standard_analysis(mgr: RunManager) -> dict[str, Any] | None:
         return None
 
 
+def _read_narrative_analysis(mgr: RunManager) -> dict | None:
+    """Read narrative analysis result from narrative_output.json."""
+    st = mgr.state
+    if not st.output_dir:
+        return None
+    path = Path(st.output_dir) / "narrative_output.json"
+    if not path.exists():
+        return None
+    try:
+        return mgr._read_cached_artifact(str(path))
+    except Exception:
+        return None
+
+
 def _list_runs() -> list[dict[str, Any]]:
     """List all completed runs in data/runs/ with checkpoint availability."""
     runs_dir = Path("data/runs")
@@ -578,6 +618,15 @@ def _read_exports_standard(mgr: RunManager) -> list[dict[str, Any]]:
         "path": str(sa_path),
         "exists": sa_path.exists(),
         "description": "标准分析完整输出（体裁、章节、事件、评分）",
+    })
+    na_path = out_dir / "narrative_output.json"
+    items.append({
+        "id": "narrative_output",
+        "label": "叙事分析结果",
+        "format": "json",
+        "path": str(na_path),
+        "exists": na_path.exists(),
+        "description": "分层叙事分析（分组摘要 + 全书综合）",
     })
     return items
 
@@ -663,6 +712,27 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/scan/stats":
             self._send_standard_stats(mgr)
+            return
+        if path == "/api/results/narrative":
+            data = _read_narrative_analysis(mgr)
+            if data:
+                self._send_json(_camelize(data))
+            else:
+                self._send_json({"error": "No narrative analysis data"}, status=HTTPStatus.NOT_FOUND)
+            return
+        if path == "/api/results/narrative/groups":
+            data = _read_narrative_analysis(mgr)
+            if data:
+                self._send_json(_camelize(data.get("group_summaries", [])))
+            else:
+                self._send_json({"error": "No narrative analysis data"}, status=HTTPStatus.NOT_FOUND)
+            return
+        if path == "/api/results/narrative/synthesis":
+            data = _read_narrative_analysis(mgr)
+            if data and data.get("book_synthesis"):
+                self._send_json(_camelize(data["book_synthesis"]))
+            else:
+                self._send_json({"error": "No book synthesis data"}, status=HTTPStatus.NOT_FOUND)
             return
         if path == "/api/results/chapter-analysis":
             data = _read_standard_analysis(mgr)

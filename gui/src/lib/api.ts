@@ -85,6 +85,15 @@ export const api = {
   getNarrativeGroups: () => getJson<GroupSummary[]>("/api/results/narrative/groups"),
   getNarrativeSynthesis: () => getJson<BookSynthesis>("/api/results/narrative/synthesis"),
 
+  // Book API
+  getBooks: () => getJson<BookListItem[]>("/api/books"),
+  getBook: (bookId: string) => getJson<BookListItem>(`/api/books/${encodeURIComponent(bookId)}`),
+  getBookChapters: (bookId: string) => getJson<BookChapter[]>(`/api/books/${encodeURIComponent(bookId)}/chapters`),
+  getBookChapter: (bookId: string, chapterId: string) =>
+    getJson<BookChapterDetail>(`/api/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}`),
+  getBookLatestAnalysis: (bookId: string) =>
+    getJson<BookLatestAnalysis>(`/api/books/${encodeURIComponent(bookId)}/analysis/latest`),
+
   // Crawl
   crawlInspect: (bookUrl: string) =>
     postJson<{ title: string; author?: string | null; source_url: string; chapters: Array<{ chapter_id: string; index: number; title: string; url: string }> }>(

@@ -1,7 +1,7 @@
 import { startTransition, useDeferredValue, useState } from "react";
 import type { FormEvent } from "react";
 import { Card, EmptyState, SectionHeader, Badge } from "../primitives";
-import { postJson } from "../../lib/api";
+import { api } from "../../lib/api";
 import { useSessionState } from "../../lib/useSessionState";
 
 type ChapterPreview = {
@@ -35,7 +35,7 @@ type Props = {
 };
 
 export default function CrawlWorkflow(props: Props) {
-  const [bookUrl, setBookUrl] = useSessionState("crawl:bookUrl", "https://www.bqg128.cc/book/17322/");
+  const [bookUrl, setBookUrl] = useSessionState("crawl:bookUrl", "");
   const [contextBefore, setContextBefore] = useSessionState("crawl:contextBefore", 3);
   const [outputDir, setOutputDir] = useSessionState("crawl:outputDir", "data/exports");
   const [inspectLoading, setInspectLoading] = useState(false);
@@ -60,7 +60,7 @@ export default function CrawlWorkflow(props: Props) {
     setError(null);
     setExportResult(null);
     try {
-      const preview = await postJson<BookPreview>("/api/crawl/inspect", { book_url: bookUrl });
+      const preview = await api.crawlInspect(bookUrl);
       startTransition(() => {
         setBook(preview);
         setChapterStart(1);
@@ -79,7 +79,7 @@ export default function CrawlWorkflow(props: Props) {
     setError(null);
     setExportResult(null);
     try {
-      const result = await postJson<ExportResult>("/api/crawl/export", {
+      const result = await api.crawlExport({
         book_url: bookUrl,
         chapter_start: chapterStart,
         chapter_end: chapterEnd,

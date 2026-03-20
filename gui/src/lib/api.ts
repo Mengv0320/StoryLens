@@ -84,4 +84,23 @@ export const api = {
   getNarrative: () => getJson<NarrativeResult>("/api/results/narrative"),
   getNarrativeGroups: () => getJson<GroupSummary[]>("/api/results/narrative/groups"),
   getNarrativeSynthesis: () => getJson<BookSynthesis>("/api/results/narrative/synthesis"),
+
+  // Crawl
+  crawlInspect: (bookUrl: string) =>
+    postJson<{ title: string; author?: string | null; source_url: string; chapters: Array<{ chapter_id: string; index: number; title: string; url: string }> }>(
+      "/api/crawl/inspect", { book_url: bookUrl }
+    ),
+  crawlExport: (params: {
+    book_url: string;
+    chapter_start: number;
+    chapter_end: number;
+    context_before_chapters: number;
+    output_dir: string;
+  }) => postJson<{
+    title: string; author?: string | null;
+    selected_start: number; selected_end: number;
+    context_count: number; selected_count: number;
+    text_output: string; json_output: string;
+    selected_titles: string[];
+  }>("/api/crawl/export", params),
 };

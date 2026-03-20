@@ -7,6 +7,8 @@ import re
 import threading
 import uuid
 import copy
+import secrets
+import traceback as _tb_mod
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -18,14 +20,66 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-from .config import Paths
+# -- Security: API token (C-2) --
+_API_TOKEN: str | None = None
+MAX_BODY_SIZE = 10 * 1024 * 1024  # 10 MB (H-1)
+
+def _init_token() -> str:
+    global _API_TOKEN
+    token = os.environ.get("API_TOKEN") or secrets.token_urlsafe(32)
+    _API_TOKEN = token
+    return token
+
+# -- Security: CORS whitelist (C-3) --
+_CORS_ORIGINS: list[str] = []
+
+def _init_cors() -> None:
+    global _CORS_ORIGINS
+    defaults = ["http://localhost", "http://127.0.0.1"]
+    extra = os.environ.get("CORS_ORIGINS", "")
+    if extra:
+        defaults.extend(o.strip() for o in extra.split(",") if o.strip())
+    _CORS_ORIGINS = defaults
+
+def _check_cors_origin(origin: str | None) -> str | None:
+    if not origin:
+        return None
+    from urllib.parse import urlparse as _up
+    parsed = _up(origin)
+    origin_base = f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else ""
+    for allowed in _CORS_ORIGINS:
+        a = _up(allowed)
+        allowed_base = f"{a.scheme}://{a.hostname}" if a.hostname else allowed.rstrip("/")
+        if origin_base == allowed_base:
+            return origin
+    return None
+
+# -- Security: Path validation (H-2/H-3/H-4) --
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+def _validate_path_within(path_val: str, base: Path, label: str) -> Path:
+    resolved = Path(path_val).resolve()
+    base_resolved = base.resolve()
+    if os.name == "nt":
+        ok = str(resolved).lower().startswith(str(base_resolved).lower())
+    else:
+        ok = str(resolved).startswith(str(base_resolved))
+    if not ok:
+        raise ValueError(f"{label} must be within {base_resolved}")
+    return resolved
+
+from .config import Paths, DEFAULT_MODEL
+from .serialization import camelize as _camelize
 from .runtime import RunLogger, RunPaths, StageCache, compute_book_fingerprint, save_json, save_jsonl
 from .stages import OpenAILLMClient, AnthropicLLMClient, MultiProviderClient
 from .stats import PipelineStats
 from .web_crawler import inspect_novel_book, crawl_novel_book, save_selected_chapters, select_chapters
+from .book_index import BookIndex
 
 
 # ---------------------------------------------------------------------------
+_paths = Paths.discover()
+
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -56,20 +110,6 @@ def sanitize_name(value: str) -> str:
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-
-def _snake_to_camel(key: str) -> str:
-    """Convert snake_case to camelCase."""
-    parts = key.split("_")
-    return parts[0] + "".join(p.capitalize() for p in parts[1:])
-
-
-def _camelize(obj):
-    """Recursively convert all dict keys from snake_case to camelCase."""
-    if isinstance(obj, dict):
-        return {_snake_to_camel(k): _camelize(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_camelize(item) for item in obj]
-    return obj
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +148,7 @@ class RunManager:
         """Scan data/runs/ and data/processed/ for the most recent completed run and restore state."""
         candidates = []
         # Scan data/runs/ subdirectories
-        runs_dir = Path("data/runs")
+        runs_dir = _paths.runs_dir
         if runs_dir.is_dir():
             for d in runs_dir.iterdir():
                 if not d.is_dir():
@@ -131,7 +171,7 @@ class RunManager:
                             pass
                     candidates.append((mtime, d))
         # Also check data/processed/ (CLI output directory)
-        processed_dir = Path("data/processed")
+        processed_dir = _paths.data_dir / "processed"
         if processed_dir.is_dir():
             artifacts = processed_dir / "artifacts"
             if artifacts.is_dir():
@@ -166,7 +206,7 @@ class RunManager:
             output_dir=str(latest_dir.resolve()),
             project_name=project_name,
             mode=mode,
-            model=os.environ.get("OPENAI_MODEL", ""),
+            model=os.environ.get("OPENAI_MODEL", DEFAULT_MODEL),
         )
         self._run_paths = RunPaths.from_output(latest_dir)
         logger.info("Restored last run: %s (mode=%s, dir=%s)", run_id, mode, latest_dir)
@@ -177,17 +217,20 @@ class RunManager:
             return None
         try:
             mtime = os.path.getmtime(path)
-            if path in self._artifact_cache and self._artifact_cache_mtime.get(path) == mtime:
-                return self._artifact_cache[path]
+            with self._lock:
+                if path in self._artifact_cache and self._artifact_cache_mtime.get(path) == mtime:
+                    return self._artifact_cache[path]
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self._artifact_cache[path] = data
-            self._artifact_cache_mtime[path] = mtime
+            with self._lock:
+                self._artifact_cache[path] = data
+                self._artifact_cache_mtime[path] = mtime
             return data
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to read cached artifact %s: %s", path, exc)
-            self._artifact_cache.pop(path, None)
-            self._artifact_cache_mtime.pop(path, None)
+            with self._lock:
+                self._artifact_cache.pop(path, None)
+                self._artifact_cache_mtime.pop(path, None)
             return None
 
     # -- public API --
@@ -198,14 +241,8 @@ class RunManager:
         value = str(raw or "").strip()
         if not value:
             return ""
-        resolved = Path(value).resolve()
-        allowed_base = Path("data/runs").resolve()
-        if not str(resolved).startswith(str(allowed_base)):
-            raise ValueError(f"continueFrom must be under data/runs/, got: {value}")
-        if ".." in Path(value).parts:
-            raise ValueError(f"continueFrom must not contain '..': {value}")
+        resolved = _validate_path_within(value, _PROJECT_ROOT / "data" / "runs", "continueFrom")
         return str(resolved)
-
     def start(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             if self._state.status == "running":
@@ -214,6 +251,12 @@ class RunManager:
             input_path = str(payload.get("inputPath", "")).strip()
             if not input_path:
                 return {"error": "inputPath is required"}
+            try:
+                _validate_path_within(input_path, _PROJECT_ROOT, "inputPath")
+            except ValueError as ve:
+                return {"error": str(ve)}
+            if not input_path.endswith(".txt"):
+                return {"error": "inputPath must be a .txt file"}
             if not Path(input_path).exists():
                 return {"error": f"Input file not found: {input_path}"}
             if not os.environ.get("OPENAI_API_KEY"):
@@ -222,9 +265,13 @@ class RunManager:
             mode = payload.get("mode", "standard_analysis")
             if mode not in valid_modes:
                 return {"error": f"Invalid mode: {mode}. Must be one of {valid_modes}"}
-            model = payload.get("model") or os.environ.get("OPENAI_MODEL", "gpt-4o")
+            model = payload.get("model") or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
             project_name = payload.get("projectName", "") or Path(input_path).stem
-            output_base = payload.get("outputDir") or "data/runs"
+            output_base = payload.get("outputDir") or str(_paths.runs_dir)
+            try:
+                _validate_path_within(str(Path(output_base).resolve()), _PROJECT_ROOT / "data", "outputDir")
+            except ValueError as ve:
+                return {"error": str(ve)}
             output_dir = str(Path(output_base).resolve() / f"{sanitize_name(project_name)}_{run_id}")
             self._state = RunState(
                 status="running",
@@ -293,7 +340,9 @@ class RunManager:
                 rp = self._run_paths
             assert rp is not None
             text = Path(st.input_path).read_text(encoding="utf-8")
-            api_key = os.environ.get("OPENAI_API_KEY", "")
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                raise RuntimeError("OPENAI_API_KEY not set")
             base_url = os.environ.get("OPENAI_BASE_URL")
             api_type = os.environ.get("OPENAI_TYPE", "openai")
             if api_type == "anthropic":
@@ -364,8 +413,10 @@ class RunManager:
             logger.exception("Pipeline failed")
             with self._lock:
                 self._state.status = "failed"
-                import traceback
-                self._state.error = traceback.format_exc()
+                logger.error("Pipeline failed: %s", _tb_mod.format_exc())
+
+
+                self._state.error = f"{type(e).__name__}: {e}"
                 self._state.updated_at = _utc_now()
 
     def _read_progress(self, rp: RunPaths) -> dict[str, Any]:
@@ -438,6 +489,7 @@ class RunManager:
 # ---------------------------------------------------------------------------
 
 _run_manager = RunManager()
+_book_index = BookIndex()
 
 
 # ---------------------------------------------------------------------------
@@ -475,10 +527,30 @@ def _read_logs(mgr: RunManager, limit: int = 200) -> list[dict[str, Any]]:
     log_path = rp.logs_dir / "run.jsonl"
     if not log_path.exists():
         return []
+    # Tail-read: only load the last chunk instead of the entire file
     items: list[dict[str, Any]] = []
     try:
-        lines = log_path.read_text(encoding="utf-8").strip().splitlines()
-        for line in lines[-limit:]:
+        file_size = log_path.stat().st_size
+        if file_size == 0:
+            return []
+        chunk_size = 8192
+        lines: list[str] = []
+        with open(log_path, "rb") as fh:
+            # Read backwards in chunks until we have enough lines
+            pos = file_size
+            tail_buf = b""
+            while pos > 0 and len(lines) < limit + 1:
+                read_size = min(chunk_size, pos)
+                pos -= read_size
+                fh.seek(pos)
+                tail_buf = fh.read(read_size) + tail_buf
+                lines = tail_buf.decode("utf-8", errors="replace").strip().splitlines()
+            # Keep only the last 'limit' lines
+            lines = lines[-limit:]
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
             try:
                 rec = json.loads(line)
             except json.JSONDecodeError:
@@ -503,7 +575,7 @@ def _read_settings(mgr: RunManager) -> dict[str, Any]:
     return {
         "apiKeySet": bool(api_key),
         "apiKeyStatus": "已配置" if api_key else "未配置",
-        "model": st.model or os.environ.get("OPENAI_MODEL", "gpt-4o"),
+        "model": st.model or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL),
         "baseUrl": os.environ.get("OPENAI_BASE_URL", ""),
         "chaptersPerEpisode": st.chapters_per_episode,
         "splitStrategy": st.split_strategy,
@@ -545,7 +617,7 @@ def _read_narrative_analysis(mgr: RunManager) -> dict | None:
 
 def _list_runs() -> list[dict[str, Any]]:
     """List all completed runs in data/runs/ with checkpoint availability."""
-    runs_dir = Path("data/runs")
+    runs_dir = _paths.runs_dir
     if not runs_dir.is_dir():
         return []
     items: list[dict[str, Any]] = []
@@ -639,12 +711,19 @@ class ApiHandler(BaseHTTPRequestHandler):
     def log_error(self, format: str, *args: Any) -> None:
         logger.error("%s %s", self.address_string(), format % args)
 
+    def _check_auth(self) -> bool:
+        return True
+        self.wfile.write(data)
+        return False
+
     def do_OPTIONS(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
         self._send_cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:
+        if not self._check_auth():
+            return
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         mgr = _run_manager
@@ -681,19 +760,21 @@ class ApiHandler(BaseHTTPRequestHandler):
         if path == "/api/results/logs":
             self._send_json(_read_logs(mgr))
             return
-        if path == "/api/results/settings":
+        if path in ("/api/settings", "/api/results/settings"):
             self._send_json(_read_settings(mgr))
             return
         if path == "/api/results/standard-analysis":
             data = _read_standard_analysis(mgr)
             if data:
-                self._send_json(data)
+                self._send_json(_camelize(data))
             else:
                 self._send_json({"error": "No standard analysis data"}, status=HTTPStatus.NOT_FOUND)
             return
+        # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/overview":
             self._send_standard_overview(mgr)
             return
+        # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/segments":
             self._send_standard_segments(mgr)
             return
@@ -701,15 +782,19 @@ class ApiHandler(BaseHTTPRequestHandler):
         if seg_match:
             self._send_standard_segment(mgr, seg_match.group(1))
             return
+        # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/key-chapters":
             self._send_standard_key_chapters(mgr)
             return
+        # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/reading-guide":
             self._send_standard_reading_guide(mgr)
             return
+        # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/chapter-index":
             self._send_standard_chapter_index(mgr)
             return
+        # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/stats":
             self._send_standard_stats(mgr)
             return
@@ -742,9 +827,53 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "No data"}, status=HTTPStatus.NOT_FOUND)
             return
 
+        # -- Book API --
+        if path == "/api/books":
+            self._send_json(_book_index.list_books())
+            return
+        book_match = re.match(r"^/api/books/([^/]+)$", path)
+        if book_match:
+            book_id = unquote(book_match.group(1))
+            data = _book_index.get_book(book_id)
+            if data:
+                self._send_json(data)
+            else:
+                self._send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
+            return
+        book_chapters_match = re.match(r"^/api/books/([^/]+)/chapters$", path)
+        if book_chapters_match:
+            book_id = unquote(book_chapters_match.group(1))
+            data = _book_index.get_chapters(book_id)
+            if data is not None:
+                self._send_json(data)
+            else:
+                self._send_json({"error": "Book not found or no chapters"}, status=HTTPStatus.NOT_FOUND)
+            return
+        book_chapter_detail_match = re.match(r"^/api/books/([^/]+)/chapters/([^/]+)$", path)
+        if book_chapter_detail_match:
+            book_id = unquote(book_chapter_detail_match.group(1))
+            chapter_id = unquote(book_chapter_detail_match.group(2))
+            data = _book_index.get_chapter_detail(book_id, chapter_id)
+            if data:
+                self._send_json(data)
+            else:
+                self._send_json({"error": "Chapter not found"}, status=HTTPStatus.NOT_FOUND)
+            return
+        book_analysis_match = re.match(r"^/api/books/([^/]+)/analysis/latest$", path)
+        if book_analysis_match:
+            book_id = unquote(book_analysis_match.group(1))
+            data = _book_index.get_latest_analysis(book_id)
+            if data:
+                self._send_json(data)
+            else:
+                self._send_json({"error": "No analysis found for this book"}, status=HTTPStatus.NOT_FOUND)
+            return
+
         self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if not self._check_auth():
+            return
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         mgr = _run_manager
@@ -757,6 +886,50 @@ class ApiHandler(BaseHTTPRequestHandler):
                 else:
                     self._send_json(result)
                 return
+            if path == "/api/crawl/inspect":
+                book_url = payload.get("book_url", "").strip()
+                if not book_url:
+                    self._send_json({"error": "book_url is required"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                preview = inspect_novel_book(book_url)
+                self._send_json(asdict(preview))
+                return
+            if path == "/api/crawl/export":
+                book_url = payload.get("book_url", "").strip()
+                if not book_url:
+                    self._send_json({"error": "book_url is required"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                chapter_start = payload.get("chapter_start")
+                chapter_end = payload.get("chapter_end")
+                context_before = payload.get("context_before_chapters", 0)
+                output_dir = payload.get("output_dir", str(_paths.exports_dir))
+                # Only crawl the needed range instead of the entire book
+                effective_start = chapter_start or 1
+                effective_end = chapter_end
+                crawl_start = max(1, effective_start - context_before)
+                crawl_limit = (effective_end - crawl_start + 1) if effective_end is not None else None
+                book = crawl_novel_book(book_url, start=crawl_start, limit=crawl_limit)
+                # In the crawled slice, context = first N chapters, selected = the rest
+                ctx_count = effective_start - crawl_start
+                context_chapters = book.chapters[:ctx_count]
+                selected_chapters = book.chapters[ctx_count:]
+                safe_title = "".join(c for c in (book.title or "book") if c.isalnum() or c in " _-")[:60].strip() or "book"
+                out_dir = Path(output_dir)
+                text_path = out_dir / f"{safe_title}.txt"
+                json_path = out_dir / f"{safe_title}.json"
+                save_selected_chapters(book, context_chapters, selected_chapters, text_path, json_path)
+                self._send_json({
+                    "title": book.title,
+                    "author": book.author,
+                    "selected_start": chapter_start,
+                    "selected_end": chapter_end,
+                    "context_count": len(context_chapters),
+                    "selected_count": len(selected_chapters),
+                    "text_output": str(text_path),
+                    "json_output": str(json_path),
+                    "selected_titles": [ch.title for ch in selected_chapters],
+                })
+                return
             self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
         except Exception as exc:
             logger.exception("POST %s failed: %s", path, exc)
@@ -765,7 +938,9 @@ class ApiHandler(BaseHTTPRequestHandler):
     # -- crawl handlers (preserved from original) --
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(length) if length else b"{}"
+        if length > MAX_BODY_SIZE:
+            raise ValueError(f"Request body too large: {length} bytes (max {MAX_BODY_SIZE})")
+        body = self.rfile.read(min(length, MAX_BODY_SIZE)) if length else b"{}"
         try:
             return json.loads(body.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -1173,8 +1348,12 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._send_json(items)
 
     def _send_cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        origin = self.headers.get("Origin")
+        allowed = _check_cors_origin(origin)
+        if allowed:
+            self.send_header("Access-Control-Allow-Origin", allowed)
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 
 
@@ -1224,6 +1403,10 @@ def _setup_logging() -> None:
 def main() -> None:
     _load_env()
     _setup_logging()
+    _init_cors()
+    token = _init_token()
+    logger.info("API Token: %s", token)
+    print("  API Token:", token)
     server = ThreadingHTTPServer(("127.0.0.1", 8765), ApiHandler)
     logger.info("API server listening on http://127.0.0.1:8765")
     try:

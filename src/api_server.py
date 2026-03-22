@@ -1317,6 +1317,49 @@ class ApiHandler(BaseHTTPRequestHandler):
                     "selected_titles": [ch.title for ch in selected_chapters],
                 })
                 return
+            reclean_match = re.match(r"^/api/books/([^/]+)/reclean$", path)
+            if reclean_match:
+                from .web_crawler import strip_spam_watermarks
+                book_id = unquote(reclean_match.group(1))
+                run_dir = _book_index.get_latest_run_dir(book_id)
+                if not run_dir:
+                    self._send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                cleaned_count = 0
+                # Clean standard_output.json chapters
+                so_path = run_dir / "standard_output.json"
+                if so_path.exists():
+                    data = json.loads(so_path.read_text(encoding="utf-8"))
+                    for ch in data.get("chapters", []):
+                        for field in ("raw_text", "chapter_summary", "text"):
+                            if field in ch and ch[field]:
+                                ch[field] = strip_spam_watermarks(ch[field])
+                        for ev in ch.get("key_events", []):
+                            for field in ("description", "context"):
+                                if field in ev and ev[field]:
+                                    ev[field] = strip_spam_watermarks(ev[field])
+                    so_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                    cleaned_count += len(data.get("chapters", []))
+                # Clean individual chapter artifacts
+                ch_dir = run_dir / "artifacts" / "chapters"
+                if ch_dir.is_dir():
+                    for p in ch_dir.glob("*.json"):
+                        try:
+                            ch_data = json.loads(p.read_text(encoding="utf-8"))
+                            changed = False
+                            for field in ("raw_text", "chapter_summary", "text", "title"):
+                                if field in ch_data and ch_data[field]:
+                                    new_val = strip_spam_watermarks(ch_data[field])
+                                    if new_val != ch_data[field]:
+                                        ch_data[field] = new_val
+                                        changed = True
+                            if changed:
+                                p.write_text(json.dumps(ch_data, ensure_ascii=False, indent=2), encoding="utf-8")
+                        except Exception:
+                            pass
+                _book_index._last_scan_mtime = 0.0
+                self._send_json({"ok": True, "cleanedChapters": cleaned_count})
+                return
             if path in ("/api/settings", "/api/results/settings"):
                 result = _update_settings(payload)
                 self._send_json(result)

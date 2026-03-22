@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Badge, Card, KeyValue } from "../primitives";
 import { getStatusBadge, getModeLabel, formatTime } from "../../features/library/utils";
 import type { BookListItem } from "../../lib/types";
-import { BookOpen, Play, RotateCw, Trash2 } from "lucide-react";
+import { BookOpen, Play, RotateCw, Trash2, Sparkles } from "lucide-react";
 import { api } from "../../lib/api";
 
 type Props = {
@@ -54,6 +54,22 @@ export default function BookCard({ book, onAction }: Props) {
         {status === "running" && (
           <span className="text-xs text-txt-faint py-1">分析进行中…</span>
         )}
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const res = await api.recleanBook(book.bookId);
+              alert(`清洗完成，处理了 ${res.cleanedChapters} 章`);
+              onAction?.(book.bookId, "recleaned");
+            } catch (err) {
+              alert(`清洗失败：${err instanceof Error ? err.message : '未知错误'}`);
+            }
+          }}
+          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-txt-soft hover:text-accent hover:bg-panel-soft transition-colors"
+          title="清洗水印"
+        >
+          <Sparkles size={13} />
+        </button>
         <button
           type="button"
           onClick={async () => {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import CrawlWorkflow from "../components/tasks/CrawlWorkflow";
 import { api } from "../lib/api";
@@ -28,6 +28,17 @@ export default function TasksPage() {
   // --- Library book list ---
   const booksFetcher = useCallback(() => api.getBooks(), []);
   const { data: libraryBooks, error: booksError } = usePolling<BookListItem[]>(booksFetcher, 15_000);
+
+  // Auto-clear selectedBook if it was deleted from library
+  useEffect(() => {
+    if (selectedBook?.bookId && libraryBooks && libraryBooks.length > 0) {
+      const stillExists = libraryBooks.some((b) => b.bookId === selectedBook.bookId);
+      if (!stillExists) {
+        setSelectedBook(null);
+        setPipelineInputPath("");
+      }
+    }
+  }, [libraryBooks]);
 
   const filteredBooks = useMemo(() => {
     if (!libraryBooks) return [];

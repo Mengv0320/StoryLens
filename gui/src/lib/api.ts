@@ -137,6 +137,8 @@ export const api = {
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error((d as any).error || "Delete failed"); }
     return r.json();
   },
+  recleanBook: (bookId: string) =>
+    postJson<{ ok: boolean; cleanedChapters: number }>(`/api/books/${encodeURIComponent(bookId)}/reclean`, {}),
   getBookLatestAnalysis: (bookId: string) =>
     getJson<BookLatestAnalysis>(`/api/books/${encodeURIComponent(bookId)}/analysis/latest`),
 

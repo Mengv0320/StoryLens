@@ -10,7 +10,7 @@ import { Card, SectionHeader, EmptyState, Badge } from "../components/primitives
 import { BookOpen, Search, Library, X, CheckCircle } from "lucide-react";
 
 type BookSource = "library" | "crawl";
-type SelectedBook = { title: string; author?: string | null; sourceUrl: string; bookId?: string };
+type SelectedBook = { title: string; author?: string | null; sourceUrl: string; bookId?: string; chapterCount?: number };
 
 export default function TasksPage() {
   const [pipelineInputPath, setPipelineInputPath] = useSessionState("task:inputPath", "");
@@ -21,6 +21,9 @@ export default function TasksPage() {
   const [bookSource, setBookSource] = useSessionState<BookSource>("task:bookSource", "library");
   const [libraryFilter, setLibraryFilter] = useState("");
   const [refinementIntensity, setRefinementIntensity] = useSessionState<"minimal" | "standard" | "detailed">("task:refinementIntensity", "standard");
+  // Share chapter range with CrawlWorkflow (same session keys)
+  const [chapterStart] = useSessionState("crawl:chapterStart", 1);
+  const [chapterEnd] = useSessionState("crawl:chapterEnd", 1);
 
   // --- Library book list ---
   const booksFetcher = useCallback(() => api.getBooks(), []);
@@ -53,7 +56,7 @@ export default function TasksPage() {
   }, []);
 
   function handleSelectLibraryBook(book: BookListItem) {
-    setSelectedBook({ title: book.title, author: book.author, sourceUrl: book.sourceUrl, bookId: book.bookId });
+    setSelectedBook({ title: book.title, author: book.author, sourceUrl: book.sourceUrl, bookId: book.bookId, chapterCount: book.chapterCount });
     setPipelineInputPath("");
   }
 
@@ -73,8 +76,11 @@ export default function TasksPage() {
       await api.startPipeline({
         inputPath: pipelineInputPath || undefined,
         url: !pipelineInputPath ? selectedBook?.sourceUrl : undefined,
+        projectName: selectedBook?.title || undefined,
         model: pipelineModel,
         mode: "standard_analysis",
+        chapterStart: chapterStart > 0 ? chapterStart : undefined,
+        chapterEnd: chapterEnd > 0 ? chapterEnd : undefined,
         options: { refinement_intensity: refinementIntensity },
       });
     } catch (err) {

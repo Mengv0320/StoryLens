@@ -139,6 +139,8 @@ class RunState:
     mode: str = "standard_analysis"
     continue_from: str = ""
     refinement_intensity: str = "standard"
+    chapter_start: int = 0
+    chapter_end: int = 0
 
 
 class RunManager:
@@ -305,6 +307,8 @@ class RunManager:
                 mode=mode,
                 continue_from=self._validate_continue_from(payload.get("continueFrom", "")),
                 refinement_intensity=str((payload.get("options") or {}).get("refinement_intensity", "standard")),
+                chapter_start=int(payload.get("chapterStart", 0)),
+                chapter_end=int(payload.get("chapterEnd", 0)),
             )
             self._run_paths = RunPaths.from_output(Path(output_dir))
             self._run_paths.ensure()
@@ -359,8 +363,12 @@ class RunManager:
 
             if st.input_path.startswith("http://") or st.input_path.startswith("https://"):
                 from .web_crawler import crawl_novel_book
-                logger.info("Crawling novel from URL: %s", st.input_path)
-                book = crawl_novel_book(st.input_path)
+                crawl_start = st.chapter_start or None
+                crawl_limit = None
+                if st.chapter_end and st.chapter_start:
+                    crawl_limit = st.chapter_end - st.chapter_start + 1
+                logger.info("Crawling novel from URL: %s (start=%s, limit=%s)", st.input_path, crawl_start, crawl_limit)
+                book = crawl_novel_book(st.input_path, start=crawl_start, limit=crawl_limit)
                 text_lines = []
                 for ch in book.chapters:
                     text_lines.append(ch.title)
@@ -611,8 +619,10 @@ def _read_settings(mgr: RunManager) -> dict[str, Any]:
     return {
         "apiKeySet": bool(api_key),
         "apiKeyStatus": "已配置" if api_key else "未配置",
+        "apiKey": api_key,
         "model": os.environ.get("OPENAI_MODEL") or st.model or DEFAULT_MODEL,
         "baseUrl": os.environ.get("OPENAI_BASE_URL", ""),
+        "apiType": os.environ.get("OPENAI_TYPE", "openai"),
         "chaptersPerEpisode": st.chapters_per_episode,
         "splitStrategy": st.split_strategy,
         "useCache": st.use_cache,
@@ -621,6 +631,66 @@ def _read_settings(mgr: RunManager) -> dict[str, Any]:
         "lastRunId": st.run_id or "—",
         "lastRunStatus": st.status,
     }
+
+
+_ENV_ALLOWED_KEYS = {
+    "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_TYPE",
+    "OPENAI_API_KEY_2", "OPENAI_BASE_URL_2", "OPENAI_MODEL_2", "OPENAI_TYPE_2",
+    "OPENAI_SANITIZE_2", "API_TOKEN", "CORS_ORIGINS",
+}
+
+
+def _update_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    """Update .env file and os.environ with provided settings."""
+    env_path = _PROJECT_ROOT / ".env"
+    # Read existing .env lines
+    existing: dict[str, str] = {}
+    lines: list[str] = []
+    if env_path.exists():
+        raw = env_path.read_text(encoding="utf-8")
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                k, _, v = stripped.partition("=")
+                existing[k.strip()] = v.strip()
+            lines.append(line)
+
+    # Map frontend field names to env var names
+    field_map = {
+        "apiKey": "OPENAI_API_KEY",
+        "baseUrl": "OPENAI_BASE_URL",
+        "model": "OPENAI_MODEL",
+        "apiType": "OPENAI_TYPE",
+    }
+
+    updated_keys: list[str] = []
+    for field, env_key in field_map.items():
+        if field in payload:
+            val = str(payload[field]).strip()
+            existing[env_key] = val
+            os.environ[env_key] = val
+            updated_keys.append(env_key)
+
+    # Rebuild .env file
+    written_keys: set[str] = set()
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.partition("=")[0].strip()
+            if k in existing:
+                new_lines.append(f"{k}={existing[k]}")
+                written_keys.add(k)
+                continue
+        new_lines.append(line)
+
+    # Append any new keys not already in the file
+    for k, v in existing.items():
+        if k not in written_keys:
+            new_lines.append(f"{k}={v}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    return {"ok": True, "updated": updated_keys}
 
 
 def _read_standard_analysis(mgr: RunManager) -> dict[str, Any] | None:
@@ -1246,6 +1316,10 @@ class ApiHandler(BaseHTTPRequestHandler):
                     "json_output": str(json_path),
                     "selected_titles": [ch.title for ch in selected_chapters],
                 })
+                return
+            if path in ("/api/settings", "/api/results/settings"):
+                result = _update_settings(payload)
+                self._send_json(result)
                 return
             if path == "/api/search":
                 q = str(payload.get("query", "")).strip()

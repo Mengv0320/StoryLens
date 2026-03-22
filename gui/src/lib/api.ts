@@ -87,9 +87,12 @@ export const api = {
   startPipeline: (config: {
     inputPath?: string;
     url?: string;
+    projectName?: string;
     outputDir?: string;
     model?: string;
     mode?: "standard_analysis";
+    chapterStart?: number;
+    chapterEnd?: number;
     options?: any;
   }) => postJson<{ runId: string; status: string }>("/api/pipeline/start", config),
   getPipelineStatus: () => getJson<PipelineStatusResponse>("/api/pipeline/status"),
@@ -105,6 +108,8 @@ export const api = {
   getFailures: () => getJson<FailureItem[]>("/api/results/failures"),
   getLogs: () => getJson<LogItem[]>("/api/results/logs"),
   getSettings: () => getJson<Record<string, unknown>>("/api/settings"),
+  updateSettings: (settings: Record<string, string>) =>
+    postJson<{ ok: boolean; updated: string[] }>("/api/settings", settings),
 
   // Standard Analysis
   getStandardAnalysis: () => getJson<StandardAnalysisResult>("/api/results/standard-analysis"),

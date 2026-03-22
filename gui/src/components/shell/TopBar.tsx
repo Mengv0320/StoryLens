@@ -74,34 +74,6 @@ export default function TopBar() {
                 <X size={13} />
               </button>
             </div>
-            <div className="mt-1">
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const res = await fetch(`/api/export/epub/${encodeURIComponent(activeBook.bookId)}`, {
-                      headers: getAuthHeaders(),
-                    });
-                    if (!res.ok) throw new Error(`导出失败: HTTP ${res.status}`);
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${activeBook.title}.epub`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
-                  } catch (err) {
-                    console.error("EPUB download failed:", err);
-                  }
-                }}
-                className="text-xs font-semibold text-accent/80 hover:text-accent hover:underline flex items-center gap-1 transition-colors bg-white/50 px-2 py-0.5 rounded-full border border-accent/10"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                导出 EPUB
-              </button>
-            </div>
           </div>
         ) : (
           <span className="text-sm px-4 py-1.5 rounded-full bg-panel-muted/50 text-txt-faint border border-border/30 shadow-inner">未选中任何书籍</span>

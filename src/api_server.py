@@ -1034,47 +1034,6 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Chapter not processed yet"}, status=HTTPStatus.NOT_FOUND)
             return
 
-        if path.startswith("/api/export/epub/"):
-            book_id = unquote(path[len("/api/export/epub/"):])
-            meta = _book_index.get_book(book_id)
-            if not meta:
-                self._send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
-                return
-            chapters = _book_index.get_chapters(book_id)
-            if not chapters:
-                self._send_json({"error": "No chapters found"}, status=HTTPStatus.NOT_FOUND)
-                return
-            
-            try:
-                from .export_epub import generate_epub
-            except ImportError:
-                self._send_json({"error": "Export module not loaded"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
-                return
-                
-            epub_chapters = []
-            for ch in chapters:
-                ch_detail = _book_index.get_chapter_detail(book_id, ch["chapterId"])
-                if ch_detail and ch_detail.get("status") == "ok":
-                    text = ch_detail.get("chapterSummary", "")
-                    events = ch_detail.get("keyEvents", [])
-                    if events:
-                        text += "\n\n【核心推演】\n" + "\n".join("- " + ev.get("description", "") for ev in events)
-                    epub_chapters.append({
-                        "title": ch["title"],
-                        "text": text
-                    })
-            
-            epub_data = generate_epub(meta["title"], meta.get("author", "Unknown"), epub_chapters)
-            
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "application/epub+zip")
-            from urllib.parse import quote
-            safe_title = quote(meta["title"])
-            self.send_header("Content-Disposition", f'attachment; filename="{safe_title}.epub"')
-            self.end_headers()
-            self.wfile.write(epub_data)
-            return
-
         # -- Search API --
         if path == "/api/search/suggestions":
             qs = parse_qs(parsed.query)

@@ -1,6 +1,35 @@
+import { useState } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
-import { Card, Badge, EmptyState } from "../components/primitives";
+import { Card, Badge, EmptyState, toast } from "../components/primitives";
+import { Copy, Check } from "lucide-react";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast("路径已复制", "success");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast("复制失败", "error");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1 rounded px-2 py-1 text-xs text-txt-soft hover:text-accent hover:bg-panel-soft transition-colors"
+      title="复制路径"
+    >
+      {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
+      {copied ? "已复制" : "复制路径"}
+    </button>
+  );
+}
 
 export default function ExportsPage() {
   const { data: exports } = usePolling(() => api.getExports(), 15_000);
@@ -20,7 +49,10 @@ export default function ExportsPage() {
               </div>
               <p className="text-sm text-txt-soft mb-2">{item.description}</p>
               {item.exists ? (
-                <p className="text-xs text-success truncate">{item.path.replace(/\\/g, '/').split('/').pop()}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-success truncate flex-1">{item.path.replace(/\\/g, '/').split('/').pop()}</p>
+                  <CopyButton text={item.path} />
+                </div>
               ) : (
                 <p className="text-xs text-txt-soft">文件尚未生成</p>
               )}

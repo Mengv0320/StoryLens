@@ -70,7 +70,7 @@ export class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErr
           <h2 className="text-lg font-semibold text-danger">
             {this.props.fallbackTitle || "此区域加载出错"}
           </h2>
-          <p className="text-txt-secondary text-sm max-w-md">
+          <p className="text-txt-soft text-sm max-w-md">
             {this.state.error?.message || "发生未知错误，请尝试重试。"}
           </p>
           <button

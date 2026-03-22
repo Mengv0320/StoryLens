@@ -6,6 +6,7 @@ import { usePolling } from "../lib/usePolling";
 import { api } from "../lib/api";
 import type { BookListItem, BookChapter } from "../lib/types";
 import { useActiveBook } from "../lib/useActiveBook";
+import { recordRecentView } from "../components/quick-actions/RecentViews";
 
 const statusMap: Record<string, { label: string; variant: "default" | "success" | "warning" | "danger" }> = {
   idle: { label: "未分析", variant: "default" },
@@ -40,6 +41,7 @@ export default function BookDetailPage() {
   useEffect(() => {
     if (bookId && title && title !== "加载中...") {
       setActiveBook({ bookId, title });
+      recordRecentView({ type: "chapter", id: bookId, label: title, path: `/book/${bookId}` });
     }
   }, [bookId, title, setActiveBook]);
 

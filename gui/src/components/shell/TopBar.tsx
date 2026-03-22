@@ -33,14 +33,7 @@ export default function TopBar() {
     prevStatus.current = runStatus;
   }, [runStatus, status?.projectName]);
 
-  // Request notification permission on first render
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  const progress = status?.progress;
+const progress = status?.progress;
   const hasProgress = progress && progress.totalChapters > 0;
   const progressPct = hasProgress ? Math.round((progress.completedChapters / progress.totalChapters) * 100) : 0;
   const variantMap: Record<string, "default" | "success" | "warning" | "danger" | "accent"> = {

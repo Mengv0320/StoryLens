@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import os
 import re
 import threading
@@ -1183,7 +1184,150 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "No analysis found for this book"}, status=HTTPStatus.NOT_FOUND)
             return
 
+        book_narrative_match = re.match(r"^/api/books/([^/]+)/narrative$", path)
+        if book_narrative_match:
+            book_id = unquote(book_narrative_match.group(1))
+            data = _book_index.get_latest_narrative(book_id)
+            if data:
+                self._send_json(_camelize(data))
+            else:
+                self._send_json({"error": "No narrative analysis found for this book"}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        book_characters_match = re.match(r"^/api/books/([^/]+)/characters$", path)
+        if book_characters_match:
+            book_id = unquote(book_characters_match.group(1))
+            data = _book_index.get_latest_analysis(book_id)
+            if not data:
+                self._send_json([])
+                return
+            char_events: dict[str, int] = {}
+            char_latest: dict[str, str] = {}
+            for ch in data.get("chapters", []):
+                ch_title = ch.get("title", "")
+                for ev in ch.get("keyEvents", []):
+                    for c in ev.get("characters", []):
+                        char_events[c] = char_events.get(c, 0) + 1
+                        char_latest[c] = ch_title
+            items = [
+                {"id": name, "name": name, "faction": None, "aliasCount": 0,
+                 "eventCount": count, "latestChapterLabel": char_latest.get(name, "")}
+                for name, count in sorted(char_events.items(), key=lambda x: x[1], reverse=True)
+            ]
+            self._send_json(items)
+            return
+
+        book_char_detail_match = re.match(r"^/api/books/([^/]+)/characters/([^/]+)$", path)
+        if book_char_detail_match:
+            book_id = unquote(book_char_detail_match.group(1))
+            char_id = unquote(book_char_detail_match.group(2))
+            data = _book_index.get_latest_analysis(book_id)
+            if not data:
+                self._send_json({"error": "Character not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            events: list[str] = []
+            related: set[str] = set()
+            found = False
+            for ch in data.get("chapters", []):
+                for ev in ch.get("keyEvents", []):
+                    chars = ev.get("characters", [])
+                    if char_id in chars:
+                        found = True
+                        events.append(ev.get("title", ev.get("description", "")))
+                        for c in chars:
+                            if c != char_id:
+                                related.add(c)
+            if not found:
+                self._send_json({"error": "Character not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            self._send_json({
+                "id": char_id, "name": char_id, "aliases": [],
+                "identity": "", "faction": "", "currentGoal": "",
+                "recentEvents": events[-20:],
+                "relationships": [{"targetName": r, "relationType": "unknown", "note": ""} for r in list(related)[:10]],
+            })
+            return
+
+        book_timeline_match = re.match(r"^/api/books/([^/]+)/timeline$", path)
+        if book_timeline_match:
+            book_id = unquote(book_timeline_match.group(1))
+            data = _book_index.get_latest_analysis(book_id)
+            if not data:
+                self._send_json([])
+                return
+            items_tl = []
+            idx = 0
+            for ch in data.get("chapters", []):
+                ch_title = ch.get("title", "")
+                for ev in ch.get("keyEvents", []):
+                    idx += 1
+                    items_tl.append({
+                        "id": ev.get("eventId", f"se_{idx}"),
+                        "title": ev.get("title", ""),
+                        "chapterRangeLabel": ch_title,
+                        "eventType": ev.get("eventType", "plot"),
+                        "eventGroup": ch_title,
+                        "importance": ev.get("importance", ch.get("importanceScore", 3)),
+                        "characters": ev.get("characters", []),
+                        "summary": ev.get("description", ""),
+                    })
+            self._send_json(items_tl)
+            return
+
+        # -- Static file fallback (SPA) --
+        # Only serve static files for non-/api/ paths
+        if not path.startswith("/api"):
+            self._serve_static(parsed.path)
+            return
+
         self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+
+    def _serve_static(self, url_path: str) -> None:
+        """Serve files from gui/dist/, falling back to index.html for SPA routing."""
+        dist_dir = _PROJECT_ROOT / "gui" / "dist"
+        if not dist_dir.is_dir():
+            self._send_json({"error": "Frontend not built"}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        # Sanitize path: strip leading slash, decode percent-encoding
+        rel = unquote(url_path).lstrip("/")
+        if not rel:
+            rel = "index.html"
+
+        # Path traversal guard
+        try:
+            target = _validate_path_within(str(dist_dir / rel), dist_dir, "static path")
+        except ValueError:
+            self.send_response(HTTPStatus.FORBIDDEN)
+            self.end_headers()
+            return
+
+        # Fall back to index.html if file not found (SPA routing)
+        if not target.is_file():
+            target = dist_dir / "index.html"
+
+        if not target.is_file():
+            self.send_response(HTTPStatus.NOT_FOUND)
+            self.end_headers()
+            return
+
+        mime, _ = mimetypes.guess_type(str(target))
+        if mime is None:
+            mime = "application/octet-stream"
+
+        try:
+            data = target.read_bytes()
+        except OSError:
+            self.send_response(HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.end_headers()
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(data)))
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_DELETE(self) -> None:
         if not self._check_auth():

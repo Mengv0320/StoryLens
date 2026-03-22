@@ -28,7 +28,7 @@ function HitCard({ hit, onClick }: { hit: SearchHit; onClick?: () => void }) {
         <Icon size={14} className={config.color} />
         <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
         {hit.chapter_title && hit.type !== "chapter" && (
-          <span className="text-xs text-txt-secondary ml-auto truncate max-w-[40%]">
+          <span className="text-xs text-txt-soft ml-auto truncate max-w-[40%]">
             {hit.chapter_title}
           </span>
         )}
@@ -37,7 +37,7 @@ function HitCard({ hit, onClick }: { hit: SearchHit; onClick?: () => void }) {
         {hit.title}
       </div>
       {hit.snippet && (
-        <div className="text-xs text-txt-secondary mt-1 line-clamp-2">{hit.snippet}</div>
+        <div className="text-xs text-txt-soft mt-1 line-clamp-2">{hit.snippet}</div>
       )}
     </button>
   );
@@ -62,7 +62,7 @@ export function SearchResults({
     return (
       <div className={`flex items-center justify-center py-8 ${className}`}>
         <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-        <span className="ml-2 text-sm text-txt-secondary">搜索中...</span>
+        <span className="ml-2 text-sm text-txt-soft">搜索中...</span>
       </div>
     );
   }
@@ -72,7 +72,7 @@ export function SearchResults({
   if (result.total === 0) {
     return (
       <div className={`text-center py-8 ${className}`}>
-        <p className="text-sm text-txt-secondary">
+        <p className="text-sm text-txt-soft">
           未找到与 "<span className="text-txt">{result.query}</span>" 相关的结果
         </p>
       </div>
@@ -86,7 +86,7 @@ export function SearchResults({
   return (
     <div className={className}>
       <div className="flex items-center gap-3 mb-3">
-        <span className="text-xs text-txt-secondary">
+        <span className="text-xs text-txt-soft">
           找到 <span className="text-txt font-medium">{result.total}</span> 条结果
         </span>
         {facetEntries.map(([type, count]) => {

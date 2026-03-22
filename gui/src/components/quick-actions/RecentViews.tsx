@@ -82,7 +82,7 @@ export function RecentViews({
   if (displayed.length === 0) {
     return (
       <div className={`bg-panel border border-border rounded-card p-4 ${className}`}>
-        <div className="flex items-center gap-2 text-txt-secondary text-sm">
+        <div className="flex items-center gap-2 text-txt-soft text-sm">
           <Clock size={16} />
           <span>暂无最近查看记录</span>
         </div>
@@ -104,11 +104,11 @@ export function RecentViews({
         <div className="flex items-center gap-2 text-txt text-sm font-medium">
           <Clock size={16} />
           <span>最近查看</span>
-          <span className="text-txt-secondary text-xs">({displayed.length})</span>
+          <span className="text-txt-soft text-xs">({displayed.length})</span>
         </div>
         <button
           onClick={clearAll}
-          className="text-txt-secondary hover:text-danger text-xs flex items-center gap-1 transition-colors"
+          className="text-txt-soft hover:text-danger text-xs flex items-center gap-1 transition-colors"
         >
           <Trash2 size={12} />
           清除
@@ -123,10 +123,10 @@ export function RecentViews({
               onClick={() => onNavigate?.(item)}
               className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-panel-hover transition-colors text-left"
             >
-              <Icon size={14} className="text-txt-secondary shrink-0" />
+              <Icon size={14} className="text-txt-soft shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-txt truncate">{item.label}</div>
-                <div className="text-xs text-txt-secondary flex items-center gap-2">
+                <div className="text-xs text-txt-soft flex items-center gap-2">
                   <span>{TYPE_LABEL[item.type]}</span>
                   {item.sublabel && (
                     <>
@@ -136,8 +136,8 @@ export function RecentViews({
                   )}
                 </div>
               </div>
-              <span className="text-xs text-txt-secondary/60 shrink-0">{formatTime(item.timestamp)}</span>
-              <ChevronRight size={12} className="text-txt-secondary/40 shrink-0" />
+              <span className="text-xs text-txt-soft/60 shrink-0">{formatTime(item.timestamp)}</span>
+              <ChevronRight size={12} className="text-txt-soft/40 shrink-0" />
             </button>
           );
         })}

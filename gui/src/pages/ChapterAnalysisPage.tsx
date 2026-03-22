@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { api } from "../lib/api";
 import type { StandardAnalysisResult, StandardChapterResult } from "../lib/types";
 import { usePolling } from "../lib/usePolling";
+import { useActiveBook } from "../lib/useActiveBook";
 import { Card, SectionHeader, EmptyState, Badge } from "../components/primitives";
 
 const IMPORTANCE_COLORS: Record<number, string> = {
@@ -73,7 +74,13 @@ function ChapterCard({ chapter }: { chapter: StandardChapterResult }) {
 
 export default function ChapterAnalysisPage() {
   const [minScore, setMinScore] = useState(1);
-  const fetcher = useCallback(() => api.getStandardAnalysis(), []);
+  const { activeBook } = useActiveBook();
+  const fetcher = useCallback(
+    () => activeBook
+      ? api.getBookLatestAnalysis(activeBook.bookId) as Promise<StandardAnalysisResult>
+      : api.getStandardAnalysis(),
+    [activeBook?.bookId],
+  );
   const { data, error } = usePolling<StandardAnalysisResult>(fetcher, 10_000);
 
   if (error) return <div className="p-6"><EmptyState message="暂无章节分析数据，请先前往「任务」页面完成标准分析。" /></div>;

@@ -114,7 +114,7 @@ export function SearchBar({
   return (
     <div className={`relative ${className}`}>
       <div className="flex items-center gap-2 bg-panel border border-border rounded-card px-3 py-2 focus-within:border-accent transition-colors">
-        <Search size={16} className="text-txt-secondary shrink-0" />
+        <Search size={16} className="text-txt-soft shrink-0" />
         <input
           ref={inputRef}
           type="text"
@@ -123,7 +123,7 @@ export function SearchBar({
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleKeyDown}
           placeholder="搜索章节、事件、角色..."
-          className="flex-1 bg-transparent text-txt text-sm outline-none placeholder:text-txt-secondary/50"
+          className="flex-1 bg-transparent text-txt text-sm outline-none placeholder:text-txt-soft/50"
         />
         {isSearching && (
           <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
@@ -131,7 +131,7 @@ export function SearchBar({
         {query && !isSearching && (
           <button
             onClick={onClear}
-            className="text-txt-secondary hover:text-txt transition-colors"
+            className="text-txt-soft hover:text-txt transition-colors"
           >
             <X size={14} />
           </button>
@@ -149,7 +149,7 @@ export function SearchBar({
               className={`px-2.5 py-0.5 text-xs rounded-full border transition-colors ${
                 active
                   ? "bg-accent/10 text-accent border-accent/30"
-                  : "bg-panel text-txt-secondary border-border hover:border-accent/20"
+                  : "bg-panel text-txt-soft border-border hover:border-accent/20"
               }`}
             >
               {s.label}
@@ -179,9 +179,9 @@ export function SearchBar({
               }`}
             >
               {item.type === "recent" ? (
-                <Clock size={13} className="text-txt-secondary shrink-0" />
+                <Clock size={13} className="text-txt-soft shrink-0" />
               ) : (
-                <ArrowRight size={13} className="text-txt-secondary shrink-0" />
+                <ArrowRight size={13} className="text-txt-soft shrink-0" />
               )}
               <span className="truncate">{item.label}</span>
             </button>

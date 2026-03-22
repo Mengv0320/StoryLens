@@ -24,7 +24,7 @@ export function RecentSearches({
         </div>
         <button
           onClick={onClear}
-          className="text-txt-secondary hover:text-danger text-xs flex items-center gap-1 transition-colors"
+          className="text-txt-soft hover:text-danger text-xs flex items-center gap-1 transition-colors"
         >
           <Trash2 size={12} />
           清除
@@ -35,7 +35,7 @@ export function RecentSearches({
           <button
             key={q}
             onClick={() => onSelect(q)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-bg border border-border rounded-full text-txt-secondary hover:text-accent hover:border-accent/50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-bg border border-border rounded-full text-txt-soft hover:text-accent hover:border-accent/50 transition-colors"
           >
             <Search size={11} />
             <span className="max-w-32 truncate">{q}</span>

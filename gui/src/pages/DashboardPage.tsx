@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { PipelineStatusResponse } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
+import { useActiveBook } from "../lib/useActiveBook";
 import type { DashboardData, NarrativeResult } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
 import { RecentViews } from "../components/quick-actions/RecentViews";
@@ -10,6 +11,7 @@ import type { RecentViewItem } from "../components/quick-actions/RecentViews";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { activeBook } = useActiveBook();
   const statusFetcher = useCallback(() => api.getPipelineStatus(), []);
   const { data: status } = usePolling<PipelineStatusResponse>(statusFetcher, 5000);
 
@@ -20,7 +22,12 @@ export default function DashboardPage() {
   const dashFetcher = useCallback(() => api.getDashboard(), []);
   const { data: dash, loading: dashLoading } = usePolling<DashboardData>(dashFetcher, dashInterval, dashEnabled);
 
-  const narrativeFetcher = useCallback(() => api.getNarrative(), []);
+  const narrativeFetcher = useCallback(
+    () => activeBook
+      ? api.getBookNarrative(activeBook.bookId)
+      : api.getNarrative(),
+    [activeBook?.bookId],
+  );
   const narrativeEnabled = !!status && pipelineStatus === "completed";
   const { data: narrative } = usePolling<NarrativeResult>(narrativeFetcher, 30_000, narrativeEnabled);
 

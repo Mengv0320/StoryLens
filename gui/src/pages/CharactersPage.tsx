@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
+import { useActiveBook } from "../lib/useActiveBook";
 import type { CharacterDetail } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
 
@@ -14,19 +15,26 @@ export default function CharactersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CharacterDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const { activeBook } = useActiveBook();
 
-  const { data: characters } = usePolling(() => api.getCharacters(), 10_000);
+  const { data: characters } = usePolling(
+    () => activeBook ? api.getBookCharacters(activeBook.bookId) : api.getCharacters(),
+    10_000,
+  );
 
   useEffect(() => {
     if (!selectedId) { setDetail(null); return; }
     let cancelled = false;
     setDetailLoading(true);
-    api.getCharacterDetail(selectedId)
+    const req = activeBook
+      ? api.getBookCharacterDetail(activeBook.bookId, selectedId)
+      : api.getCharacterDetail(selectedId);
+    req
       .then(d => { if (!cancelled) setDetail(d); })
       .catch(() => { if (!cancelled) setDetail(null); })
       .finally(() => { if (!cancelled) setDetailLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedId]);
+  }, [selectedId, activeBook?.bookId]);
 
   return (
     <div className="p-6 space-y-5">

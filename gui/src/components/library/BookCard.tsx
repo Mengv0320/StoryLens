@@ -1,5 +1,6 @@
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Badge, Card, KeyValue } from "../primitives";
+import { Badge, Card, KeyValue, toast } from "../primitives";
 import { getStatusBadge, getModeLabel, formatTime } from "../../features/library/utils";
 import type { BookListItem } from "../../lib/types";
 import { BookOpen, Play, RotateCw, Trash2, Sparkles } from "lucide-react";
@@ -13,6 +14,29 @@ type Props = {
 export default function BookCard({ book, onAction }: Props) {
   const status = book.latestStatus || "idle";
   const badge = getStatusBadge(status);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (deleteTimer.current) clearTimeout(deleteTimer.current); };
+  }, []);
+
+  const handleDeleteClick = async () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      deleteTimer.current = setTimeout(() => setDeleteConfirm(false), 2000);
+      return;
+    }
+    // second click within 2s — actually delete
+    if (deleteTimer.current) clearTimeout(deleteTimer.current);
+    setDeleteConfirm(false);
+    try {
+      await api.deleteBook(book.bookId);
+      onAction?.(book.bookId, "deleted");
+    } catch (err) {
+      toast(`删除失败：${err instanceof Error ? err.message : "未知错误"}`, "error");
+    }
+  };
 
   return (
     <Card className="flex flex-col gap-3">
@@ -59,10 +83,10 @@ export default function BookCard({ book, onAction }: Props) {
           onClick={async () => {
             try {
               const res = await api.recleanBook(book.bookId);
-              alert(`清洗完成，处理了 ${res.cleanedChapters} 章`);
+              toast(`清洗完成，处理了 ${res.cleanedChapters} 章`, "success");
               onAction?.(book.bookId, "recleaned");
             } catch (err) {
-              alert(`清洗失败：${err instanceof Error ? err.message : '未知错误'}`);
+              toast(`清洗失败：${err instanceof Error ? err.message : "未知错误"}`, "error");
             }
           }}
           className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-txt-soft hover:text-accent hover:bg-panel-soft transition-colors"
@@ -72,20 +96,15 @@ export default function BookCard({ book, onAction }: Props) {
         </button>
         <button
           type="button"
-          onClick={async () => {
-            if (!confirm(`确定删除「${book.title}」的所有数据吗？此操作不可恢复。`)) return;
-            try {
-              await api.deleteBook(book.bookId);
-              onAction?.(book.bookId, "deleted");
-            } catch (err) {
-              console.error('Failed to delete book:', err);
-              alert(`删除失败：${err instanceof Error ? err.message : '未知错误'}`);
-            }
-          }}
-          className="ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-danger/70 hover:text-danger hover:bg-danger-soft/50 transition-colors"
-          title="删除书籍"
+          onClick={handleDeleteClick}
+          className={`ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors ${
+            deleteConfirm
+              ? "text-danger bg-danger-soft/50 border border-danger/30"
+              : "text-danger/70 hover:text-danger hover:bg-danger-soft/50"
+          }`}
+          title={deleteConfirm ? "再次点击确认删除" : "删除书籍"}
         >
-          <Trash2 size={13} />
+          {deleteConfirm ? <span className="px-1">确认删除？</span> : <Trash2 size={13} />}
         </button>
       </div>
     </Card>

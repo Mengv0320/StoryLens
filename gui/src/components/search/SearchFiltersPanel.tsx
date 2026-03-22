@@ -45,12 +45,12 @@ export function SearchFiltersPanel({
   return (
     <div className={`bg-panel border border-border rounded-card p-3 ${className}`}>
       <div className="flex items-center gap-1.5 mb-3">
-        <SlidersHorizontal size={14} className="text-txt-secondary" />
-        <span className="text-xs font-medium text-txt-secondary">高级筛选</span>
+        <SlidersHorizontal size={14} className="text-txt-soft" />
+        <span className="text-xs font-medium text-txt-soft">高级筛选</span>
       </div>
 
       <div className="mb-3">
-        <label className="text-xs text-txt-secondary mb-1 block">事件类型</label>
+        <label className="text-xs text-txt-soft mb-1 block">事件类型</label>
         <select
           value={filters.event_type || ""}
           onChange={(e) =>
@@ -67,7 +67,7 @@ export function SearchFiltersPanel({
       </div>
 
       <div className="mb-3">
-        <label className="text-xs text-txt-secondary mb-1 block">
+        <label className="text-xs text-txt-soft mb-1 block">
           重要度范围: {filters.min_importance ?? 1} - {filters.max_importance ?? 5}
         </label>
         <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export function SearchFiltersPanel({
             }
             className="flex-1 accent-accent"
           />
-          <span className="text-xs text-txt-secondary">至</span>
+          <span className="text-xs text-txt-soft">至</span>
           <input
             type="range"
             min={1}
@@ -96,7 +96,7 @@ export function SearchFiltersPanel({
       </div>
 
       <div>
-        <label className="text-xs text-txt-secondary mb-1.5 block">事件标记</label>
+        <label className="text-xs text-txt-soft mb-1.5 block">事件标记</label>
         <div className="flex flex-wrap gap-1.5">
           {FLAG_OPTIONS.map((opt) => {
             const active = !!currentFlags[opt.key];
@@ -107,7 +107,7 @@ export function SearchFiltersPanel({
                 className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
                   active
                     ? "bg-accent/10 text-accent border-accent/30"
-                    : "bg-bg text-txt-secondary border-border hover:border-accent/20"
+                    : "bg-bg text-txt-soft border-border hover:border-accent/20"
                 }`}
               >
                 {opt.label}

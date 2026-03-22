@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+export { toast, ToastContainer, useToast } from "./Toast";
 
 type Props = { children: ReactNode; className?: string; onClick?: () => void };
 

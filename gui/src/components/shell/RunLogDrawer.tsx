@@ -30,7 +30,7 @@ export default function RunLogDrawer() {
         className="w-full h-10 flex items-center justify-between px-5 text-sm text-txt-soft hover:bg-panel-muted"
       >
         <span>运行日志 ({items.length})</span>
-        {open ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>
       {open && (
         <div ref={scrollContainerRef} className="overflow-y-auto h-[200px] px-5 pb-3 font-mono text-xs">

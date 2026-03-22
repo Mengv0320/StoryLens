@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
+import { useActiveBook } from "../lib/useActiveBook";
 import type { NarrativeResult, GroupSummary, TensionPoint } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
 
@@ -114,7 +115,13 @@ function GroupCard({ group, isOpen, onToggle }: { group: GroupSummary; isOpen: b
 }
 
 export default function NarrativePage() {
-  const fetcher = useCallback(() => api.getNarrative(), []);
+  const { activeBook } = useActiveBook();
+  const fetcher = useCallback(
+    () => activeBook
+      ? api.getBookNarrative(activeBook.bookId)
+      : api.getNarrative(),
+    [activeBook?.bookId],
+  );
   const { data, loading } = usePolling<NarrativeResult>(fetcher, 15_000);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 

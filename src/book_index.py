@@ -145,6 +145,19 @@ class BookIndex:
             result["author"] = meta.author
         return result
 
+    def get_latest_narrative(self, book_id: str) -> dict[str, Any] | None:
+        """Return narrative_output.json for the latest run of a book."""
+        run_dir = self.get_latest_run_dir(book_id)
+        if not run_dir:
+            return None
+        path = run_dir / "narrative_output.json"
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------

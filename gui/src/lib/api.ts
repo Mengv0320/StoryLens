@@ -141,6 +141,14 @@ export const api = {
     postJson<{ ok: boolean; cleanedChapters: number }>(`/api/books/${encodeURIComponent(bookId)}/reclean`, {}),
   getBookLatestAnalysis: (bookId: string) =>
     getJson<BookLatestAnalysis>(`/api/books/${encodeURIComponent(bookId)}/analysis/latest`),
+  getBookNarrative: (bookId: string) =>
+    getJson<NarrativeResult>(`/api/books/${encodeURIComponent(bookId)}/narrative`),
+  getBookCharacters: (bookId: string) =>
+    getJson<CharacterListItem[]>(`/api/books/${encodeURIComponent(bookId)}/characters`),
+  getBookCharacterDetail: (bookId: string, charId: string) =>
+    getJson<CharacterDetail>(`/api/books/${encodeURIComponent(bookId)}/characters/${encodeURIComponent(charId)}`),
+  getBookTimeline: (bookId: string) =>
+    getJson<TimelineItem[]>(`/api/books/${encodeURIComponent(bookId)}/timeline`),
 
   // Crawl
   crawlInspect: (bookUrl: string) =>

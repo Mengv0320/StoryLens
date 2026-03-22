@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
+import { useActiveBook } from "../lib/useActiveBook";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
 
 export default function TimelinePage() {
-  const { data: items } = usePolling(() => api.getTimeline(), 10_000);
+  const { activeBook } = useActiveBook();
+  const { data: items } = usePolling(
+    () => activeBook ? api.getBookTimeline(activeBook.bookId) : api.getTimeline(),
+    10_000,
+  );
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 

@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from .config import ModelConfig
+from .config import ModelConfig, Paths, DEFAULT_MODEL
 from .runtime import RunLogger, RunPaths, StageCache, compute_book_fingerprint, save_json
 from .stages import AnthropicLLMClient, LLMClient, OpenAILLMClient
 from .stats import PipelineStats
@@ -28,12 +28,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chapter-start", type=int, default=None, help="1-based starting chapter number.")
     parser.add_argument("--chapter-end", type=int, default=None, help="1-based ending chapter number.")
     parser.add_argument("--context-before-chapters", type=int, default=0, help="Prepend N earlier chapters as context.")
-    parser.add_argument("--output", type=Path, default=Path("data/processed/output.json"), help="JSON result path.")
+    parser.add_argument("--output", type=Path, default=None, help="JSON result path.")
     parser.add_argument("--model", default=None, help="Override model name.")
     parser.add_argument("--base-url", default=None, help="Override OpenAI-compatible base URL.")
     parser.add_argument("--use-anthropic", action="store_true", help="Use Anthropic API.")
     parser.add_argument("--model-config", type=Path, default=None, help="Per-stage model config JSON.")
-    parser.add_argument("--use-cache", action="store_true", default=True, help="Enable LLM response caching.")
     parser.add_argument("--no-cache", action="store_true", help="Disable LLM response caching.")
     parser.add_argument("--project", default=None, help="Project name for cache namespace.")
     parser.add_argument("--max-workers", type=int, default=4, help="Max concurrent workers.")
@@ -51,11 +50,11 @@ def main() -> None:
             print(format_chapter_listing(book))
             return
         if args.chapter_start or args.chapter_end:
-            selected = select_chapters(
+            context, selected = select_chapters(
                 book, start=args.chapter_start, end=args.chapter_end,
                 context_before=args.context_before_chapters,
             )
-            save_selected_chapters(selected, args.output, json_output=args.crawl_json_output)
+            save_selected_chapters(book, context, selected, args.output, json_output_path=args.crawl_json_output)
         else:
             save_crawled_chapters(book, args.output, json_output=args.crawl_json_output)
         return
@@ -66,24 +65,27 @@ def main() -> None:
         return
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
-    model = args.model or os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+    model = args.model or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
     base_url = args.base_url or os.environ.get("OPENAI_BASE_URL")
     use_anthropic = args.use_anthropic or os.environ.get("USE_ANTHROPIC", "").lower() in ("1", "true")
-    use_cache = args.use_cache and not args.no_cache
+    use_cache = not args.no_cache
 
     stats = PipelineStats()
+    paths = Paths.discover()
 
     if use_anthropic:
-        default_client: LLMClient = AnthropicLLMClient(api_key=api_key, model=model)
+        anthropic_base = base_url or os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+        default_client: LLMClient = AnthropicLLMClient(api_key=api_key, model=model, base_url=anthropic_base)
     else:
         default_client = OpenAILLMClient(api_key=api_key, model=model, base_url=base_url)
 
     text = args.input.read_text(encoding="utf-8")
 
-    run_paths = RunPaths.create("data/runs", project_name=args.project)
+    run_paths = RunPaths.from_output(paths.runs_dir / (args.project or "default"))
+    run_paths.ensure()
     fingerprint = compute_book_fingerprint(text)
-    cache = StageCache.for_book(Path("data/cache"), fingerprint, model) if use_cache else None
-    logger = RunLogger(run_paths.log_dir / "run.jsonl")
+    cache = StageCache.for_book(paths.cache_dir, fingerprint, model) if use_cache else None
+    logger = RunLogger(run_paths.logs_dir / "run.jsonl")
 
     from .standard_analysis import run_standard_analysis
 
@@ -112,6 +114,7 @@ def main() -> None:
             narrative_result = run_narrative_analysis(
                 chapter_results=ok_chapters,
                 genre=genre_dict,
+                book_title=args.project,
                 client=default_client,
                 paths=paths,
                 validator=validator,

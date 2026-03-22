@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -15,10 +18,26 @@ def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _atomic_write(path: Path, data: str, encoding: str = "utf-8") -> None:
+    """Write data to *path* atomically: write to a temp file then os.replace()."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as fh:
+            fh.write(data)
+        os.replace(tmp, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def compute_book_fingerprint(text: str) -> str:
-    """Stable fingerprint for a book's content (first 16 hex chars of SHA-256)."""
+    """Stable fingerprint for a book's content (first 32 hex chars of SHA-256)."""
     normalized = text.strip().replace("\r\n", "\n").replace("\r", "\n")
-    return sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    return sha256(normalized.encode("utf-8")).hexdigest()[:32]
 
 
 @dataclass
@@ -30,7 +49,12 @@ class RunPaths:
 
     @classmethod
     def from_output(cls, output_path: Path) -> "RunPaths":
-        output_dir = output_path if output_path.suffix == "" else output_path.parent
+        if output_path.is_dir():
+            output_dir = output_path
+        elif output_path.exists():
+            output_dir = output_path.parent
+        else:
+            output_dir = output_path if output_path.suffix == "" else output_path.parent
         return cls(
             output_dir=output_dir,
             cache_dir=output_dir / "cache",
@@ -93,9 +117,17 @@ class StageCache:
 
     @classmethod
     def for_book(cls, base_cache_dir: Path, book_fingerprint: str, model: str) -> "StageCache":
-        """Create a book-level cache that persists across runs."""
+        """Create a book-level cache that persists across runs.
+
+        Supports legacy 16-char fingerprints: if the new 32-char directory does
+        not exist but a matching 16-char prefix directory does, reuse it.
+        """
         namespace = f"{book_fingerprint}:{model}:v{PIPELINE_VERSION}"
         cache_dir = base_cache_dir / "books" / book_fingerprint
+        if not cache_dir.exists():
+            legacy_dir = base_cache_dir / "books" / book_fingerprint[:16]
+            if legacy_dir.exists():
+                cache_dir = legacy_dir
         return cls(cache_dir=cache_dir, namespace=namespace)
 
     @classmethod
@@ -113,8 +145,7 @@ class StageCache:
 
     def set(self, stage: str, payload: dict[str, Any], result: dict[str, Any]) -> None:
         path = self._path_for(stage, payload)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        _atomic_write(path, json.dumps(result, ensure_ascii=False, indent=2))
 
     def _path_for(self, stage: str, payload: dict[str, Any]) -> Path:
         digest = sha256(
@@ -135,6 +166,7 @@ class RunLogger:
     def __init__(self, log_path: Path) -> None:
         self.log_path = log_path
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
 
     def log(self, event: str, **fields: Any) -> None:
         record = {
@@ -142,13 +174,13 @@ class RunLogger:
             "event": event,
             **fields,
         }
-        with self.log_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        with self._lock:
+            with self.log_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def write_artifact(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def write_state_checkpoint(
@@ -173,8 +205,7 @@ def write_state_checkpoint(
         "metadata": metadata or {},
     }
     path = run_dir / "knowledge" / "state_checkpoint.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(checkpoint, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write(path, json.dumps(checkpoint, ensure_ascii=False, indent=2))
     return path
 
 
@@ -204,12 +235,10 @@ def load_state_checkpoint(run_dir: Path) -> dict[str, Any] | None:
 
 def save_json(data: dict[str, object], output_path: str | Path) -> None:
     path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def save_jsonl(items: list[dict[str, object]], output_path: str | Path) -> None:
     path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     content = "\n".join(json.dumps(item, ensure_ascii=False) for item in items)
-    path.write_text(content, encoding="utf-8")
+    _atomic_write(path, content)

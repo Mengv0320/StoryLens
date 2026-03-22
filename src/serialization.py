@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def snake_to_camel(key: str) -> str:
@@ -67,38 +70,68 @@ def repair_json(text: str) -> str:
     text = re.sub(r',\s*([}\]])', r'\1', text)
 
     # Iterative repair: try json.loads, on failure fix the problematic position
-    for _ in range(200):
+    max_attempts = 20
+    prev_text = None
+    stale_count = 0
+    for attempt in range(max_attempts):
         try:
             json.loads(text)
+            logger.debug("repair_json: succeeded after %d attempt(s)", attempt)
             return text
         except json.JSONDecodeError as e:
             pos = e.pos
             if pos is None or pos < 0:
+                logger.debug("repair_json: giving up at attempt %d — no error position", attempt)
                 break
             msg = e.msg
+
+            # Early exit: if text hasn't changed for 2 consecutive rounds, stop
+            if text == prev_text:
+                stale_count += 1
+                if stale_count >= 2:
+                    logger.debug("repair_json: no progress for %d rounds, stopping at attempt %d", stale_count, attempt)
+                    break
+            else:
+                stale_count = 0
+            prev_text = text
+
             if "Unterminated string" in msg:
-                # pos points to the opening quote; close the string at end
-                text = text + '"'
+                # Close the unterminated string at the nearest logical boundary
+                newline_pos = text.find('\n', pos)
+                if newline_pos != -1:
+                    text = text[:newline_pos] + '"' + text[newline_pos:]
+                else:
+                    text = text + '"'
                 text = _balance_brackets(text)
                 continue
             if "Invalid control character" in msg:
-                # Escape the control character at pos
                 ch = text[pos]
                 escape_map = {'\n': '\\n', '\r': '\\r', '\t': '\\t'}
                 replacement = escape_map.get(ch, f'\\u{ord(ch):04x}')
                 text = text[:pos] + replacement + text[pos + 1:]
                 continue
-            if "Expecting ',' delimiter" in msg or "Expecting ':' separator" in msg:
-                ch = text[pos] if pos < len(text) else ''
-                if ch == '"':
-                    text = text[:pos] + '\\"' + text[pos + 1:]
-                    continue
-                if pos > 0 and text[pos - 1] == '"':
-                    text = text[:pos - 1] + '\\"' + text[pos:]
+            if "Expecting ',' delimiter" in msg:
+                # Insert missing comma before the current token
+                text = text[:pos] + ',' + text[pos:]
+                continue
+            if "Expecting ':' separator" in msg:
+                text = text[:pos] + ':' + text[pos:]
+                continue
+            if "Expecting value" in msg:
+                # Possibly a trailing comma — remove it
+                before = text[:pos].rstrip()
+                if before.endswith(','):
+                    text = before[:-1] + text[pos:]
                     continue
                 break
+            if "Extra data" in msg:
+                # Truncate everything after the first valid JSON object
+                text = text[:pos]
+                break
+            logger.debug("repair_json: unhandled error '%s' at pos %d, stopping at attempt %d", msg, pos, attempt)
             break
 
+    logger.debug("repair_json: finished after %d attempt(s) (may not be valid JSON)", max_attempts)
     # Final bracket balance
     text = _balance_brackets(text)
     text = re.sub(r',\s*([}\]])', r'\1', text)

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
-import type { TimelineItem } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
 
 export default function TimelinePage() {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict
 from typing import Protocol
@@ -78,6 +79,12 @@ class OpenAILLMClient:
 
     @staticmethod
     def _sanitize_json(text: str) -> str:
+        """Light pre-processing before json.loads(): strip LLM artifacts (think
+        tags, code fences, preamble text) and trailing commas.
+
+        Call chain: raw text -> _sanitize_json -> json.loads -> on failure -> repair_json (heavy)
+        See also: AnthropicLLMClient._clean_json (subset of this logic for Anthropic responses).
+        """
         import re
         # Strip <think>...</think> tags (qwen thinking mode)
         text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
@@ -171,7 +178,6 @@ class AnthropicLLMClient:
         base_url: str,
         system_prompt: str | None = None,
     ) -> None:
-        self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.system_prompt = system_prompt or (
@@ -201,6 +207,12 @@ class AnthropicLLMClient:
         adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=20)
         self._session.mount("https://", adapter)
         self._session.mount("http://", adapter)
+        # Store pre-built headers; api_key is NOT kept as an instance attribute
+        self._headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
 
     def complete_json(self, prompt: str, max_tokens: int = 8192) -> JsonDict:
         last_err = None
@@ -228,11 +240,7 @@ class AnthropicLLMClient:
         # Light stagger to avoid gateway overload (reduced from 0.5-3.0)
         time.sleep(random.uniform(0.1, 0.5))
         url = f"{self.base_url}/v1/messages"
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        }
+        headers = self._headers
         body = {
             "model": self.model,
             "max_tokens": max_tokens,
@@ -301,6 +309,15 @@ class AnthropicLLMClient:
 
     @staticmethod
     def _clean_json(text: str) -> str:
+        """Lightweight JSON cleanup for Anthropic responses.
+
+        A subset of OpenAILLMClient._sanitize_json — Anthropic responses
+        don't have <think> tags or code fences (already stripped by
+        _strip_code_fence), so we only trim preamble and trailing commas.
+
+        Call chain: raw text -> _strip_code_fence -> _clean_json -> json.loads
+                    -> on failure -> repair_json (heavy, from serialization module)
+        """
         for i, c in enumerate(text):
             if c in ('{', '['):
                 text = text[i:]
@@ -365,6 +382,8 @@ class MultiProviderClient:
     before sending, to bypass content filters.
     """
 
+    _log = logging.getLogger("stages.MultiProviderClient")
+
     def __init__(self, providers: list[tuple[OpenAILLMClient, bool]]) -> None:
         """providers: list of (client, needs_sanitize) tuples."""
         self._providers = providers
@@ -374,6 +393,7 @@ class MultiProviderClient:
 
     def complete_json(self, prompt: str, max_tokens: int = 8192) -> JsonDict:
         n = len(self._providers)
+        last_err: Exception | None = None
         for attempt in range(n * 2):
             with self._lock:
                 idx = self._idx
@@ -384,11 +404,17 @@ class MultiProviderClient:
                 result = client.complete_json(actual_prompt, max_tokens=max_tokens)
                 self.last_usage = client.last_usage
                 return result
-            except Exception:
+            except Exception as exc:
+                last_err = exc
+                self._log.warning(
+                    "Provider %d/%d failed (attempt %d): %s: %s",
+                    idx + 1, n, attempt + 1,
+                    type(exc).__name__, exc,
+                )
                 if attempt >= n * 2 - 1:
                     raise
                 continue
-        raise RuntimeError("All providers failed")
+        raise RuntimeError(f"All providers failed: {last_err}")
 
 
 def _extract_prompt_section(full_text: str, section_name: str) -> str:

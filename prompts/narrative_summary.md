@@ -11,6 +11,11 @@
 ### 本组章节数据
 {{chapters_data}}
 
+### 边界情况处理
+- 如果本组日常平淡，没有新伏笔，`new_foreshadowing` 必须输出 `[]`。
+- 如果没有回收伏笔，`resolved_foreshadowing` 必须输出 `[]`。
+- 只有发生**显著成长或转变**的角色才列入 `character_arcs`，若无则输出 `[]`。
+
 ### 输出要求
 
 严格输出 JSON，不要输出其他内容：
@@ -42,3 +47,23 @@
 - `tension_level`：1=平淡过渡 2=铺垫蓄力 3=稳步推进 4=高潮迭起 5=核心转折/大高潮
 - 所有文本用中文
 - 不要输出 JSON 以外的内容
+
+### Few-Shot 示例
+
+**本组摘要输出示例：**
+```json
+{
+  "plot_progress": "主角车队在荒野遭遇变异兽群，被迫躲入废弃补给站。在抵御兽潮的过程中，意外发现了补给站地下隐藏的旧时代实验室，解开了丧尸病毒爆发的初期冰山一角。",
+  "new_foreshadowing": ["地下实验室主机里提到的'方舟计划'"],
+  "resolved_foreshadowing": [],
+  "open_questions": ["是谁赶在他们之前搬空了实验室的核心资料？"],
+  "subplot_threads": ["旧时代实验室探索"],
+  "character_arcs": [
+    {"name": "胖子", "development": "在生死危机中克服了懦弱，第一次主动开枪保护队友"}
+  ],
+  "key_causality": [
+    {"cause": "遭遇变异兽群围攻", "effect": "被迫躲入废弃补给站并发现地下实验室"}
+  ],
+  "tension_level": 4
+}
+```

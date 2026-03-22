@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+import threading
 from dataclasses import asdict, dataclass
 from html import unescape
 from html.parser import HTMLParser
@@ -9,6 +11,31 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
+import ipaddress
+import socket
+import ssl
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Maximum response body size: 10 MB
+_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+
+
+def _make_ssl_context() -> ssl.SSLContext:
+    """Create a TLS context with broader cipher support for crawling public sites."""
+    ctx = ssl.create_default_context()
+    try:
+        ctx.set_ciphers("DEFAULT:!aNULL:!eNULL:!MD5")
+    except ssl.SSLError:
+        pass  # fall back to default ciphers
+    return ctx
+
+
+_SSL_CTX = _make_ssl_context()
+
+# Rate limiter: minimum seconds between consecutive HTTP requests
+_REQUEST_INTERVAL = 0.1
+_last_request_lock = threading.Lock()
+_last_request_time = 0.0
 
 
 CHAPTER_TITLE_RE = re.compile(
@@ -18,6 +45,74 @@ CHAPTER_TITLE_RE = re.compile(
 LIKELY_CONTENT_RE = re.compile(r"(content|article|chapter|text|read|main|entry|post)", re.IGNORECASE)
 NOISE_RE = re.compile(r"(nav|menu|header|footer|comment|share|tool|login|sign|ad|banner|copyright)", re.IGNORECASE)
 WHITESPACE_RE = re.compile(r"\s+")
+SPAM_WATERMARK_RE = re.compile(
+    r"xiuxi8\s*Θcom|bqglpヽcc|haiyue8♜cc"
+    r"|[a-zA-Z0-9]{3,12}[\s]*[Θ♜ヽ][a-zA-Z]{2,5}",
+)
+
+
+def strip_spam_watermarks(text: str) -> str:
+    """Remove known pirate-site advertising watermarks from text."""
+    return SPAM_WATERMARK_RE.sub("", text)
+
+
+def _rate_limit() -> None:
+    """Enforce minimum interval between HTTP requests to avoid hammering servers."""
+    global _last_request_time
+    with _last_request_lock:
+        now = time.monotonic()
+        wait = _REQUEST_INTERVAL - (now - _last_request_time)
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_time = time.monotonic()
+
+
+_SSRF_BLOCKED_NETWORKS = [
+    # RFC 1918 private
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    # Loopback
+    ipaddress.ip_network("127.0.0.0/8"),
+    # Link-local
+    ipaddress.ip_network("169.254.0.0/16"),
+    # "This" network
+    ipaddress.ip_network("0.0.0.0/8"),
+    # IPv6
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+
+def validate_url(url: str) -> tuple[str, str]:
+    """Validate URL to prevent SSRF: block private IPs, allow only http(s).
+
+    Returns (url, hostname). The URL is returned unchanged (not IP-pinned)
+    to preserve TLS SNI compatibility with HTTPS targets.
+
+    Note: Uses explicit network blocklist instead of ipaddress.is_private,
+    which overzealously blocks 198.18.0.0/15 (used by CDNs in some regions).
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"URL scheme must be http or https, got: {parsed.scheme!r}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"URL has no hostname: {url}")
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError(f"DNS resolution failed for {hostname}: {exc}") from exc
+    has_valid = False
+    for family, _, _, _, sockaddr in infos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if any(ip in net for net in _SSRF_BLOCKED_NETWORKS) or ip.is_multicast:
+            raise ValueError(f"URL resolves to a blocked IP address: {ip}")
+        has_valid = True
+    if not has_valid:
+        raise ValueError(f"DNS returned no addresses for {hostname}")
+    return url, hostname
 
 
 @dataclass
@@ -156,15 +251,18 @@ class ArticleParser(HTMLParser):
 
 
 def fetch_html(url: str, encoding: str | None = None, user_agent: str | None = None, timeout: int = 20) -> str:
+    pinned_url, original_host = validate_url(url)
+    _rate_limit()
     headers = {
         "User-Agent": user_agent or (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
+        ),
+        "Host": original_host,
     }
-    request = Request(url, headers=headers)
-    with urlopen(request, timeout=timeout) as response:
-        raw = response.read()
+    request = Request(pinned_url, headers=headers)
+    with urlopen(request, timeout=timeout, context=_SSL_CTX) as response:
+        raw = response.read(_MAX_RESPONSE_BYTES)
         detected = encoding or response.headers.get_content_charset() or "utf-8"
     return raw.decode(detected, errors="ignore")
 
@@ -227,31 +325,43 @@ def crawl_novel(
 def crawl_novel_book(
     index_url: str,
     limit: int | None = None,
+    start: int | None = None,
     encoding: str | None = None,
     user_agent: str | None = None,
     timeout: int = 20,
 ) -> CrawledBook:
-    special = try_crawl_bqg_family(index_url, limit=limit, encoding=encoding, user_agent=user_agent, timeout=timeout)
+    validate_url(index_url)  # validate only; fetch_html will re-validate and pin
+    special = try_crawl_bqg_family(index_url, limit=limit, start=start, encoding=encoding, user_agent=user_agent, timeout=timeout)
     if special is not None:
         return special
 
     index_html = fetch_html(index_url, encoding=encoding, user_agent=user_agent, timeout=timeout)
     chapter_links = extract_chapter_links(index_url, index_html)
-    if limit is not None:
-        chapter_links = chapter_links[:limit]
+    # slice to requested range (1-based start/limit)
+    start_idx = max(1, start or 1) - 1
+    end_idx = (start_idx + limit) if limit is not None else len(chapter_links)
+    chapter_links = chapter_links[start_idx:end_idx]
 
-    chapters: list[CrawledChapter] = []
-    for idx, link in enumerate(chapter_links, start=1):
+    chapters: list[CrawledChapter] = [None] * len(chapter_links)  # type: ignore[list-item]
+    base_idx = start_idx + 1  # 1-based chapter numbering
+
+    def _fetch_one(idx_link: tuple[int, object]) -> tuple[int, CrawledChapter]:
+        idx, link = idx_link
         chapter_html = fetch_html(link.url, encoding=encoding, user_agent=user_agent, timeout=timeout)
         title, text = extract_chapter_content(chapter_html, fallback_title=link.title)
-        chapters.append(
-            CrawledChapter(
-                chapter_id=f"chapter_{idx:03d}",
-                title=title,
-                url=link.url,
-                text=text,
-            )
+        return idx, CrawledChapter(
+            chapter_id=f"chapter_{idx:03d}",
+            title=title,
+            url=link.url,
+            text=text,
         )
+
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        futures = {pool.submit(_fetch_one, (base_idx + i, link)): i for i, link in enumerate(chapter_links)}
+        for future in as_completed(futures):
+            i_pos = futures[future]
+            _, ch = future.result()
+            chapters[i_pos] = ch
     return CrawledBook(
         title=extract_index_title(index_html) or "Unknown Novel",
         author=None,
@@ -267,6 +377,7 @@ def inspect_novel_book(
     user_agent: str | None = None,
     timeout: int = 20,
 ) -> BookPreview:
+    validate_url(index_url)  # validate only; fetch_html will re-validate and pin
     special = try_inspect_bqg_family(index_url, limit=limit, encoding=encoding, user_agent=user_agent, timeout=timeout)
     if special is not None:
         return special
@@ -311,6 +422,7 @@ def _is_bqg_mirror(host: str) -> bool:
 def try_crawl_bqg_family(
     index_url: str,
     limit: int | None = None,
+    start: int | None = None,
     encoding: str | None = None,
     user_agent: str | None = None,
     timeout: int = 20,
@@ -336,29 +448,39 @@ def try_crawl_bqg_family(
         user_agent=user_agent,
         timeout=timeout,
     )
-    if limit is not None:
-        chapter_names = chapter_names[:limit]
+    # slice to requested range (1-based)
+    start_idx = max(1, start or 1) - 1
+    end_idx = (start_idx + limit) if limit is not None else len(chapter_names)
+    chapter_names = chapter_names[start_idx:end_idx]
+    base_chapterid = start_idx + 1  # bqg API uses 1-based chapterid
 
     title = str(book_meta.get("title", "")).strip()
-    chapters: list[CrawledChapter] = []
-    for idx, chapter_name in enumerate(chapter_names, start=1):
+    chapters: list[CrawledChapter] = [None] * len(chapter_names)  # type: ignore[list-item]
+
+    def _fetch_bqg_one(pos_idx_name: tuple[int, int, str]) -> tuple[int, CrawledChapter]:
+        pos, chapterid, chapter_name = pos_idx_name
         chapter_data = fetch_bqg_json(
-            f"{mirror_base}/api/chapter?id={mirror_book_id}&chapterid={idx}",
-            referer=f"{mirror_base}/#/book/{mirror_book_id}/{idx}.html",
+            f"{mirror_base}/api/chapter?id={mirror_book_id}&chapterid={chapterid}",
+            referer=f"{mirror_base}/#/book/{mirror_book_id}/{chapterid}.html",
             encoding=encoding,
             user_agent=user_agent,
             timeout=timeout,
         )
-        text = str(chapter_data.get("txt", "")).strip()
+        text = strip_spam_watermarks(str(chapter_data.get("txt", "")).strip())
         resolved_title = str(chapter_data.get("chaptername", "")).strip() or str(chapter_name).strip()
-        chapters.append(
-            CrawledChapter(
-                chapter_id=f"chapter_{idx:03d}",
-                title=resolved_title,
-                url=f"{mirror_base}/#/book/{mirror_book_id}/{idx}.html",
-                text=text,
-            )
+        return pos, CrawledChapter(
+            chapter_id=f"chapter_{chapterid:03d}",
+            title=resolved_title,
+            url=f"{mirror_base}/#/book/{mirror_book_id}/{chapterid}.html",
+            text=text,
         )
+
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        futures = {pool.submit(_fetch_bqg_one, (i, base_chapterid + i, name)): i for i, name in enumerate(chapter_names)}
+        for future in as_completed(futures):
+            i_pos = futures[future]
+            _, ch = future.result()
+            chapters[i_pos] = ch
     if not chapters and title:
         raise RuntimeError(f"No chapters returned for {title}.")
     return CrawledBook(
@@ -431,11 +553,16 @@ def resolve_bqg_mirror(index_url: str, original_book_id: int, user_agent: str | 
         return mirror_base, original_book_id
 
     verify_url = f"https://www.bqg128.cc/userverify/book/{original_book_id}/1.html"
+    pinned_url, original_host = validate_url(verify_url)
+    _rate_limit()
     request = Request(
-        verify_url,
-        headers={"User-Agent": user_agent or "Mozilla/5.0"},
+        pinned_url,
+        headers={
+            "User-Agent": user_agent or "Mozilla/5.0",
+            "Host": original_host,
+        },
     )
-    with urlopen(request, timeout=timeout) as response:
+    with urlopen(request, timeout=timeout, context=_SSL_CTX) as response:
         final_url = response.geturl()
     match = re.search(r"(https://[^/]+)/#/book/(\d+)/1\.html", final_url)
     if not match:
@@ -465,7 +592,20 @@ def load_bqg_book_preview(
         user_agent=user_agent,
         timeout=timeout,
     )
-    chapter_names = book_list.get("list") or []
+    chapter_names = book_list.get("list")
+    # Some books use a separate dirid for their chapter listing
+    if not chapter_names and book_meta.get("dirid"):
+        dir_id = book_meta["dirid"]
+        book_list = fetch_bqg_json(
+            f"{mirror_base}/api/booklist?id={dir_id}",
+            referer=f"{mirror_base}/#/book/{mirror_book_id}",
+            encoding=encoding,
+            user_agent=user_agent,
+            timeout=timeout,
+        )
+        chapter_names = book_list.get("list") or []
+    else:
+        chapter_names = chapter_names or []
     if not isinstance(chapter_names, list):
         raise RuntimeError("Unexpected bqg book list payload.")
     return mirror_base, mirror_book_id, book_meta, chapter_names
@@ -478,14 +618,17 @@ def fetch_bqg_json(
     user_agent: str | None = None,
     timeout: int = 20,
 ) -> dict:
+    pinned_url, original_host = validate_url(url)
+    _rate_limit()
     headers = {
         "User-Agent": user_agent or "Mozilla/5.0",
         "Referer": referer,
         "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Host": original_host,
     }
-    request = Request(url, headers=headers)
-    with urlopen(request, timeout=timeout) as response:
-        raw = response.read()
+    request = Request(pinned_url, headers=headers)
+    with urlopen(request, timeout=timeout, context=_SSL_CTX) as response:
+        raw = response.read(_MAX_RESPONSE_BYTES)
     detected = encoding or "utf-8"
     return json.loads(raw.decode(detected, errors="ignore"))
 
@@ -592,7 +735,8 @@ def save_selected_chapters(
 
 
 def clean_text(text: str) -> str:
-    return WHITESPACE_RE.sub(" ", unescape(text)).strip()
+    cleaned = WHITESPACE_RE.sub(" ", unescape(text)).strip()
+    return strip_spam_watermarks(cleaned)
 
 
 def collapse_lines(parts: list[str]) -> str:

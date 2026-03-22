@@ -70,6 +70,14 @@ def _chapters_data_json(chapters: list[dict]) -> str:
     return json.dumps(slim, ensure_ascii=False)
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Convert value to int with fallback on failure."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def _parse_group_summary(raw: dict, group_id: str, chapter_range: str,
                          chapter_ids: list[str]) -> GroupSummary:
     """Convert LLM JSON dict to GroupSummary dataclass."""
@@ -84,14 +92,14 @@ def _parse_group_summary(raw: dict, group_id: str, chapter_range: str,
         subplot_threads=raw.get("subplot_threads", []),
         character_arcs=raw.get("character_arcs", []),
         key_causality=raw.get("key_causality", []),
-        tension_level=int(raw.get("tension_level", 1)),
+        tension_level=_safe_int(raw.get("tension_level", 1), default=1),
     )
 
 
-def _parse_book_synthesis(raw: dict) -> BookSynthesis:
+def _parse_book_synthesis(raw: dict, book_title: str = "未知") -> BookSynthesis:
     """Convert LLM JSON dict to BookSynthesis dataclass."""
     return BookSynthesis(
-        title=raw.get("title", "未知"),
+        title=book_title,
         main_plotline=raw.get("main_plotline", ""),
         subplot_summary=raw.get("subplot_summary", []),
         foreshadowing_tracker=raw.get("foreshadowing_tracker", []),
@@ -153,25 +161,31 @@ def _summarize_group(
     elapsed = time.time() - t0
 
     # --- validate ---
+    validation_failed = False
     try:
         validator.validate("narrative_summary.schema.json", raw)
     except Exception as exc:
+        validation_failed = True
         if logger:
             logger.log("validation_warning", stage="narrative_summary",
                        group_id=group_id, error=str(exc))
+        # If raw is missing the critical 'plot_progress' field, use defaults
+        if not isinstance(raw, dict) or not raw.get("plot_progress"):
+            return default_group_summary(group_id, chapter_range, chapter_ids)
 
-    # --- stats ---
+    # --- stats (read from client.last_usage, not from raw JSON) ---
     if stats:
+        usage = getattr(client, "last_usage", None) or {}
         stats.record_call(
             stage="narrative_summary",
-            prompt_tokens=raw.get("_prompt_tokens", 0),
-            completion_tokens=raw.get("_completion_tokens", 0),
-            total_tokens=raw.get("_total_tokens", 0),
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
             duration_seconds=elapsed,
         )
 
-    # --- cache write ---
-    if cache:
+    # --- cache write (skip if validation failed) ---
+    if cache and not validation_failed:
         cache.set("narrative_summary", cache_payload, raw)
 
     return _parse_group_summary(raw, group_id, chapter_range, chapter_ids)
@@ -185,6 +199,7 @@ def _synthesize_book(
     group_summaries: list[GroupSummary],
     genre: dict,
     total_chapters: int,
+    book_title: str,
     client: LLMClient,
     paths: Paths,
     validator: SchemaValidator,
@@ -214,6 +229,7 @@ def _synthesize_book(
         genre=json.dumps(genre, ensure_ascii=False),
         total_chapters=str(total_chapters),
         total_groups=str(len(group_summaries)),
+        book_title=book_title,
     )
 
     # --- LLM call ---
@@ -222,28 +238,34 @@ def _synthesize_book(
     elapsed = time.time() - t0
 
     # --- validate ---
+    validation_failed = False
     try:
         validator.validate("book_synthesis.schema.json", raw)
     except Exception as exc:
+        validation_failed = True
         if logger:
             logger.log("validation_warning", stage="book_synthesis",
                        error=str(exc))
+        # If raw is missing the critical 'main_plotline' field, use defaults
+        if not isinstance(raw, dict) or not raw.get("main_plotline"):
+            return default_book_synthesis()
 
-    # --- stats ---
+    # --- stats (read from client.last_usage, not from raw JSON) ---
     if stats:
+        usage = getattr(client, "last_usage", None) or {}
         stats.record_call(
             stage="book_synthesis",
-            prompt_tokens=raw.get("_prompt_tokens", 0),
-            completion_tokens=raw.get("_completion_tokens", 0),
-            total_tokens=raw.get("_total_tokens", 0),
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
             duration_seconds=elapsed,
         )
 
-    # --- cache write ---
-    if cache:
+    # --- cache write (skip if validation failed) ---
+    if cache and not validation_failed:
         cache.set("book_synthesis", cache_payload, raw)
 
-    return _parse_book_synthesis(raw)
+    return _parse_book_synthesis(raw, book_title)
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +275,7 @@ def _synthesize_book(
 def run_narrative_analysis(
     chapter_results: list[dict],
     genre: dict,
+    book_title: str,
     client: LLMClient,
     paths: Paths,
     validator: SchemaValidator,
@@ -325,6 +348,7 @@ def run_narrative_analysis(
             group_summaries=result.group_summaries,
             genre=genre,
             total_chapters=len(chapter_results),
+            book_title=book_title,
             client=client,
             paths=paths,
             validator=validator,

@@ -3,20 +3,32 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+DEFAULT_MODEL = "gpt-4o"
+DEFAULT_PORT = 8765
+
 
 @dataclass(frozen=True)
 class Paths:
     root: Path
     prompts_dir: Path
     schemas_dir: Path
+    data_dir: Path
+    runs_dir: Path
+    cache_dir: Path
+    exports_dir: Path
 
     @classmethod
     def discover(cls) -> "Paths":
         root = Path(__file__).resolve().parent.parent
+        data = root / "data"
         return cls(
             root=root,
             prompts_dir=root / "prompts",
             schemas_dir=root / "schemas",
+            data_dir=data,
+            runs_dir=data / "runs",
+            cache_dir=data / "cache",
+            exports_dir=data / "exports",
         )
 
 

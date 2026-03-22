@@ -32,6 +32,7 @@ type ExportResult = {
 
 type Props = {
   onExportComplete?: (result: { textOutput: string; jsonOutput: string; title: string }) => void;
+  onBookChange?: (book: { title: string; author?: string | null; sourceUrl: string } | null) => void;
 };
 
 export default function CrawlWorkflow(props: Props) {
@@ -45,6 +46,8 @@ export default function CrawlWorkflow(props: Props) {
   const [chapterEnd, setChapterEnd] = useSessionState("crawl:chapterEnd", 1);
   const [chapterFilter, setChapterFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [rangeError, setRangeError] = useState<string | null>(null);
   const [exportResult, setExportResult] = useSessionState<ExportResult | null>("crawl:exportResult", null);
 
   const deferredFilter = useDeferredValue(chapterFilter.trim());
@@ -54,8 +57,25 @@ export default function CrawlWorkflow(props: Props) {
       ? book.chapters
       : book.chapters.filter((chapter) => chapter.title.includes(deferredFilter));
 
+  function validateUrl(url: string): string | null {
+    const trimmed = url.trim();
+    if (!trimmed) return "请输入书籍目录链接";
+    if (!/^https?:\/\//i.test(trimmed)) return "链接必须以 http:// 或 https:// 开头";
+    return null;
+  }
+
+  function validateChapterRange(start: number, end: number): string | null {
+    if (!Number.isInteger(start) || !Number.isInteger(end)) return "章节编号必须为整数";
+    if (start < 1 || end < 1) return "章节编号必须为正整数";
+    if (start > end) return "起始章节不能大于结束章节";
+    return null;
+  }
+
   async function handleInspect(event: FormEvent) {
     event.preventDefault();
+    const urlErr = validateUrl(bookUrl);
+    if (urlErr) { setUrlError(urlErr); return; }
+    setUrlError(null);
     setInspectLoading(true);
     setError(null);
     setExportResult(null);
@@ -66,15 +86,20 @@ export default function CrawlWorkflow(props: Props) {
         setChapterStart(1);
         setChapterEnd(Math.min(5, preview.chapters.length || 1));
       });
+      props.onBookChange?.({ title: preview.title, author: preview.author, sourceUrl: preview.source_url });
     } catch (err) {
       setBook(null);
       setError(err instanceof Error ? err.message : "检查书链接失败");
+      props.onBookChange?.(null);
     } finally {
       setInspectLoading(false);
     }
   }
 
   async function handleExport() {
+    const rangeErr = validateChapterRange(chapterStart, chapterEnd);
+    if (rangeErr) { setRangeError(rangeErr); return; }
+    setRangeError(null);
     setExportLoading(true);
     setError(null);
     setExportResult(null);
@@ -110,10 +135,11 @@ export default function CrawlWorkflow(props: Props) {
               <span className="text-sm text-txt-soft">书籍目录链接</span>
               <input
                 value={bookUrl}
-                onChange={(event) => setBookUrl(event.target.value)}
-                className="h-11 rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-accent"
+                onChange={(event) => { setBookUrl(event.target.value); setUrlError(null); }}
+                className={`h-11 rounded-md border bg-white px-3 text-sm outline-none focus:border-accent ${urlError ? "border-danger" : "border-border"}`}
                 placeholder="https://www.bqg128.cc/book/17322/"
               />
+              {urlError && <span className="text-xs text-danger">{urlError}</span>}
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm text-txt-soft">导出目录</span>
@@ -165,7 +191,7 @@ export default function CrawlWorkflow(props: Props) {
                   <span className="text-sm text-txt-soft">开始章节</span>
                   <select
                     value={chapterStart}
-                    onChange={(event) => setChapterStart(Number(event.target.value))}
+                    onChange={(event) => { setChapterStart(Number(event.target.value)); setRangeError(null); }}
                     className="h-10 rounded-md border border-border bg-white px-3 text-sm"
                   >
                     {book.chapters.map((chapter) => (
@@ -180,7 +206,7 @@ export default function CrawlWorkflow(props: Props) {
                   <span className="text-sm text-txt-soft">结束章节</span>
                   <select
                     value={chapterEnd}
-                    onChange={(event) => setChapterEnd(Number(event.target.value))}
+                    onChange={(event) => { setChapterEnd(Number(event.target.value)); setRangeError(null); }}
                     className="h-10 rounded-md border border-border bg-white px-3 text-sm"
                   >
                     {book.chapters.map((chapter) => (
@@ -206,6 +232,10 @@ export default function CrawlWorkflow(props: Props) {
               <div className="rounded-md border border-border bg-bg-elevated/60 p-4 text-sm text-txt-soft">
                 将导出第 {chapterStart} 到第 {chapterEnd} 章，并额外补入前 {contextBefore} 章作为前情提要上下文。
               </div>
+
+              {rangeError && (
+                <div className="text-xs text-danger">{rangeError}</div>
+              )}
 
               <button
                 type="button"

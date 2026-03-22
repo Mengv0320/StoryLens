@@ -41,9 +41,13 @@ def split_into_chapters(
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         chunk = text[start:end].strip()
         title = match.group(0).strip()
+        # Strip the title line from the body text — title is already stored in
+        # Chapter.title, and downstream prompts receive both fields separately.
+        body = text[match.end():end].strip()
         if stable_ids:
+            # ID hash uses the original chunk (title + body) for backward compat.
             chapter_id = compute_chapter_id(title, chunk)
         else:
             chapter_id = f"chapter_{index + 1:03d}"
-        chapters.append(Chapter(chapter_id=chapter_id, title=title, text=chunk, sequence_index=index))
+        chapters.append(Chapter(chapter_id=chapter_id, title=title, text=body, sequence_index=index))
     return chapters

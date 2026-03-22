@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -29,6 +30,8 @@ class StageSummary:
     total_duration_seconds: float = 0.0
 
 
+# Default token prices (USD per token). Override by passing custom `token_prices`
+# dict to PipelineStats(). Keys: "prompt", "completion".
 DEFAULT_TOKEN_PRICES: dict[str, float] = {
     "prompt": 0.15 / 1_000_000,
     "completion": 0.60 / 1_000_000,
@@ -42,6 +45,7 @@ class PipelineStats:
         self,
         token_prices: dict[str, float] | None = None,
     ) -> None:
+        self._lock = threading.Lock()
         self.records: list[LLMCallRecord] = []
         self.token_prices = token_prices or DEFAULT_TOKEN_PRICES
         self._stage_timers: dict[str, float] = {}
@@ -57,22 +61,25 @@ class PipelineStats:
         chapter_id: str = "",
         episode_id: str = "",
     ) -> None:
-        self.records.append(LLMCallRecord(
-            stage=stage,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            duration_seconds=duration_seconds,
-            model=model,
-            chapter_id=chapter_id,
-            episode_id=episode_id,
-        ))
+        with self._lock:
+            self.records.append(LLMCallRecord(
+                stage=stage,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                duration_seconds=duration_seconds,
+                model=model,
+                chapter_id=chapter_id,
+                episode_id=episode_id,
+            ))
 
     def start_stage_timer(self, stage: str) -> None:
-        self._stage_timers[stage] = time.monotonic()
+        with self._lock:
+            self._stage_timers[stage] = time.monotonic()
 
     def stop_stage_timer(self, stage: str) -> float:
-        start = self._stage_timers.pop(stage, None)
+        with self._lock:
+            start = self._stage_timers.pop(stage, None)
         if start is None:
             return 0.0
         return time.monotonic() - start
@@ -133,8 +140,13 @@ class PipelineStats:
         }
 
     def to_dict(self) -> dict[str, Any]:
+        with self._lock:
+            records_snap = list(self.records)
+        # Serialize from snapshot so we don't hold the lock during heavy work.
+        # aggregate_*/estimate_cost already iterate self.records without mutation,
+        # so a shallow copy is sufficient.
         return {
-            "calls": [asdict(r) for r in self.records],
+            "calls": [asdict(r) for r in records_snap],
             "by_stage": [asdict(s) for s in self.aggregate_by_stage()],
             "by_chapter": {k: asdict(v) for k, v in self.aggregate_by_chapter().items()},
             "by_episode": {k: asdict(v) for k, v in self.aggregate_by_episode().items()},

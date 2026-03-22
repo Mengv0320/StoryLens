@@ -1,9 +1,22 @@
 import type { ReactNode } from "react";
 
-type Props = { children: ReactNode; className?: string };
+type Props = { children: ReactNode; className?: string; onClick?: () => void };
 
-export function Card({ children, className = "" }: Props) {
-  return <div className={`rounded-md border border-border bg-panel shadow-sm p-5 ${className}`}>{children}</div>;
+export function Card({ children, className = "", onClick }: Props) {
+  const interactive = !!onClick;
+  return (
+    <div
+      className={`glass-card p-6 ${interactive ? "cursor-pointer hover:border-accent/40" : ""} ${className}`}
+      onClick={onClick}
+      {...(interactive ? {
+        role: "button" as const,
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } },
+      } : {})}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function SectionHeader({ title, extra }: { title: string; extra?: ReactNode }) {
@@ -24,7 +37,7 @@ export function Badge({ label, variant = "default" }: { label: string; variant?:
     info: "bg-info-soft text-info",
     accent: "bg-accent-soft text-accent",
   };
-  return <span className={`inline-block text-xs px-2.5 py-0.5 rounded-full font-medium ${cls[variant]}`}>{label}</span>;
+  return <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium tracking-wide shadow-sm border border-transparent ${cls[variant]}`}>{label}</span>;
 }
 
 export function EmptyState({ message }: { message: string }) {

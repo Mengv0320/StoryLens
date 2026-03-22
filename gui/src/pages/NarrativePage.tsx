@@ -62,7 +62,7 @@ function GroupCard({ group, isOpen, onToggle }: { group: GroupSummary; isOpen: b
             <div>
               <div className="font-medium text-txt mb-1">新伏笔</div>
               <ul className="list-disc list-inside text-txt-soft space-y-0.5">
-                {group.newForeshadowing.map((f, i) => <li key={i}>{f}</li>)}
+                {group.newForeshadowing.map((f, i) => <li key={`foreshadow-new-${i}-${f.slice(0, 20)}`}>{f}</li>)}
               </ul>
             </div>
           )}
@@ -70,7 +70,7 @@ function GroupCard({ group, isOpen, onToggle }: { group: GroupSummary; isOpen: b
             <div>
               <div className="font-medium text-txt mb-1">回收伏笔</div>
               <ul className="list-disc list-inside text-success space-y-0.5">
-                {group.resolvedForeshadowing.map((f, i) => <li key={i}>{f}</li>)}
+                {group.resolvedForeshadowing.map((f, i) => <li key={`foreshadow-resolved-${i}-${f.slice(0, 20)}`}>{f}</li>)}
               </ul>
             </div>
           )}
@@ -78,8 +78,8 @@ function GroupCard({ group, isOpen, onToggle }: { group: GroupSummary; isOpen: b
             <div>
               <div className="font-medium text-txt mb-1">角色弧线</div>
               <div className="space-y-1">
-                {group.characterArcs.map((a, i) => (
-                  <div key={i} className="flex gap-2">
+                {group.characterArcs.map((a) => (
+                  <div key={`arc-${a.name}`} className="flex gap-2">
                     <Badge label={a.name} variant="info" />
                     <span className="text-txt-soft">{a.development}</span>
                   </div>
@@ -92,7 +92,7 @@ function GroupCard({ group, isOpen, onToggle }: { group: GroupSummary; isOpen: b
               <div className="font-medium text-txt mb-1">因果链</div>
               <div className="space-y-1">
                 {group.keyCausality.map((c, i) => (
-                  <div key={i} className="text-txt-soft">
+                  <div key={`cause-${i}-${c.cause.slice(0, 15)}`} className="text-txt-soft">
                     <span className="text-warning">{c.cause}</span>
                     <span className="mx-1">→</span>
                     <span className="text-accent">{c.effect}</span>
@@ -163,7 +163,7 @@ export default function NarrativePage() {
               </div>
               {syn.themes.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {syn.themes.map((t, i) => <Badge key={i} label={t} variant="info" />)}
+                  {syn.themes.map((t) => <Badge key={`theme-${t}`} label={t} variant="info" />)}
                 </div>
               )}
             </div>
@@ -182,8 +182,8 @@ export default function NarrativePage() {
             <Card>
               <SectionHeader title="角色弧线" />
               <div className="space-y-3">
-                {syn.characterArcs.map((a, i) => (
-                  <div key={i} className="border-b border-border/50 pb-2 last:border-0">
+                {syn.characterArcs.map((a) => (
+                  <div key={`char-${a.name}`} className="border-b border-border/50 pb-2 last:border-0">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge label={a.name} variant="accent" />
                     </div>
@@ -191,7 +191,7 @@ export default function NarrativePage() {
                     {a.keyMoments.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {a.keyMoments.map((m, j) => (
-                          <span key={j} className="text-xs bg-panel-muted px-1.5 py-0.5 rounded text-txt-soft">{m}</span>
+                          <span key={`moment-${j}-${m.slice(0, 15)}`} className="text-xs bg-panel-muted px-1.5 py-0.5 rounded text-txt-soft">{m}</span>
                         ))}
                       </div>
                     )}
@@ -206,8 +206,8 @@ export default function NarrativePage() {
             <Card>
               <SectionHeader title="伏笔追踪" />
               <div className="space-y-2 text-sm">
-                {syn.foreshadowingTracker.map((f, i) => (
-                  <div key={i} className="flex items-start gap-2">
+                {syn.foreshadowingTracker.map((f) => (
+                  <div key={`ftrack-${f.setupGroup}-${f.setup.slice(0, 20)}`} className="flex items-start gap-2">
                     <Badge label={f.resolvedGroup ? "已回收" : "未回收"} variant={f.resolvedGroup ? "success" : "warning"} />
                     <div>
                       <span className="text-txt">{f.setup}</span>
@@ -227,8 +227,8 @@ export default function NarrativePage() {
             <Card>
               <SectionHeader title="支线概要" />
               <div className="space-y-2 text-sm">
-                {syn.subplotSummary.map((s, i) => (
-                  <div key={i} className="flex items-start gap-2">
+                {syn.subplotSummary.map((s) => (
+                  <div key={`subplot-${s.thread}`} className="flex items-start gap-2">
                     <Badge label={s.status === "resolved" ? "已完结" : "进行中"} variant={s.status === "resolved" ? "success" : "accent"} />
                     <div>
                       <span className="font-medium text-txt">{s.thread}</span>
@@ -245,7 +245,7 @@ export default function NarrativePage() {
             <Card>
               <SectionHeader title="未解悬念" />
               <ul className="list-disc list-inside text-sm text-txt-soft space-y-1">
-                {syn.openQuestions.map((q, i) => <li key={i}>{q}</li>)}
+                {syn.openQuestions.map((q, i) => <li key={`oq-${i}-${q.slice(0, 20)}`}>{q}</li>)}
               </ul>
             </Card>
           )}
@@ -255,7 +255,7 @@ export default function NarrativePage() {
             <Card>
               <SectionHeader title="质量备注" />
               <ul className="list-disc list-inside text-sm text-txt-soft space-y-1">
-                {syn.qualityNotes.map((n, i) => <li key={i}>{n}</li>)}
+                {syn.qualityNotes.map((n, i) => <li key={`qn-${i}-${n.slice(0, 20)}`}>{n}</li>)}
               </ul>
             </Card>
           )}

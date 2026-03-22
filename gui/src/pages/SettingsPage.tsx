@@ -23,17 +23,17 @@ export default function SettingsPage() {
       <Card>
         <SectionHeader title="模型配置" />
         <div className="space-y-0.5">
-          <KeyValue label="默认模型" value={model} />
-          <KeyValue label="Base URL" value={baseUrl} />
-          <KeyValue label="API Key 状态" value={<span className="text-success">{apiKeyStatus}</span>} />
+          <KeyValue label="默认模型" value={String(model)} />
+          <KeyValue label="Base URL" value={String(baseUrl)} />
+          <KeyValue label="API Key 状态" value={<span className="text-success">{String(apiKeyStatus)}</span>} />
         </div>
       </Card>
 
       <Card>
         <SectionHeader title="运行设置" />
         <div className="space-y-0.5">
-          <KeyValue label="每集目标章节数" value={chaptersPerEpisode} />
-          <KeyValue label="分集策略" value={splitStrategy} />
+          <KeyValue label="每集目标章节数" value={String(chaptersPerEpisode)} />
+          <KeyValue label="分集策略" value={String(splitStrategy)} />
           <KeyValue label="缓存" value={useCache ? "启用" : "禁用"} />
           <KeyValue label="跳过质量检查" value={skipQuality ? "是" : "否"} />
         </div>
@@ -42,9 +42,9 @@ export default function SettingsPage() {
       <Card>
         <SectionHeader title="输出设置" />
         <div className="space-y-0.5">
-          <KeyValue label="输出目录" value={outputDir} />
-          <KeyValue label="最近运行 ID" value={lastRunId} />
-          <KeyValue label="最近运行状态" value={lastRunStatus} />
+          <KeyValue label="输出目录" value={String(outputDir)} />
+          <KeyValue label="最近运行 ID" value={String(lastRunId)} />
+          <KeyValue label="最近运行状态" value={String(lastRunStatus)} />
         </div>
       </Card>
     </div>

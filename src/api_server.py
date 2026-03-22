@@ -15,20 +15,25 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 logger = logging.getLogger(__name__)
 
 # -- Security: API token (C-2) --
 _API_TOKEN: str | None = None
+_API_TOKEN_CONFIGURED: bool = False
 MAX_BODY_SIZE = 10 * 1024 * 1024  # 10 MB (H-1)
 
 def _init_token() -> str:
-    global _API_TOKEN
-    token = os.environ.get("API_TOKEN") or secrets.token_urlsafe(32)
-    _API_TOKEN = token
-    return token
+    global _API_TOKEN, _API_TOKEN_CONFIGURED
+    env_token = os.environ.get("API_TOKEN", "").strip()
+    if env_token:
+        _API_TOKEN = env_token
+        _API_TOKEN_CONFIGURED = True
+    else:
+        _API_TOKEN = secrets.token_urlsafe(32)
+        _API_TOKEN_CONFIGURED = False
+    return _API_TOKEN
 
 # -- Security: CORS whitelist (C-3) --
 _CORS_ORIGINS: list[str] = []
@@ -133,6 +138,7 @@ class RunState:
     use_cache: bool = True
     mode: str = "standard_analysis"
     continue_from: str = ""
+    refinement_intensity: str = "standard"
 
 
 class RunManager:
@@ -249,16 +255,27 @@ class RunManager:
                 return {"error": "A pipeline run is already in progress"}
             run_id = uuid.uuid4().hex[:12]
             input_path = str(payload.get("inputPath", "")).strip()
-            if not input_path:
-                return {"error": "inputPath is required"}
-            try:
-                _validate_path_within(input_path, _PROJECT_ROOT, "inputPath")
-            except ValueError as ve:
-                return {"error": str(ve)}
-            if not input_path.endswith(".txt"):
-                return {"error": "inputPath must be a .txt file"}
-            if not Path(input_path).exists():
-                return {"error": f"Input file not found: {input_path}"}
+            url = str(payload.get("url", "")).strip()
+            if not input_path and not url:
+                return {"error": "inputPath or url is required"}
+            
+            if url:
+                if not url.startswith("http"):
+                    return {"error": "url must start with http or https"}
+                target_path = url
+                project_name = payload.get("projectName", "") or sanitize_name(urlparse(url).netloc)
+            else:
+                try:
+                    _validate_path_within(input_path, _PROJECT_ROOT, "inputPath")
+                except ValueError as ve:
+                    return {"error": str(ve)}
+                if not input_path.endswith(".txt"):
+                    return {"error": "inputPath must be a .txt file"}
+                if not Path(input_path).exists():
+                    return {"error": f"Input file not found: {input_path}"}
+                target_path = input_path
+                project_name = payload.get("projectName", "") or Path(input_path).stem
+
             if not os.environ.get("OPENAI_API_KEY"):
                 return {"error": "OPENAI_API_KEY environment variable is not set"}
             valid_modes = {"standard_analysis"}
@@ -266,7 +283,6 @@ class RunManager:
             if mode not in valid_modes:
                 return {"error": f"Invalid mode: {mode}. Must be one of {valid_modes}"}
             model = payload.get("model") or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
-            project_name = payload.get("projectName", "") or Path(input_path).stem
             output_base = payload.get("outputDir") or str(_paths.runs_dir)
             try:
                 _validate_path_within(str(Path(output_base).resolve()), _PROJECT_ROOT / "data", "outputDir")
@@ -276,7 +292,7 @@ class RunManager:
             self._state = RunState(
                 status="running",
                 run_id=run_id,
-                input_path=input_path,
+                input_path=target_path,
                 output_dir=output_dir,
                 model=model,
                 project_name=project_name,
@@ -288,6 +304,7 @@ class RunManager:
                 use_cache=bool(payload.get("useCache", True)),
                 mode=mode,
                 continue_from=self._validate_continue_from(payload.get("continueFrom", "")),
+                refinement_intensity=str((payload.get("options") or {}).get("refinement_intensity", "standard")),
             )
             self._run_paths = RunPaths.from_output(Path(output_dir))
             self._run_paths.ensure()
@@ -304,7 +321,7 @@ class RunManager:
             "status": st.status,
             "runId": st.run_id,
             "mode": st.mode,
-            "model": st.model,
+            "model": os.environ.get("OPENAI_MODEL") or st.model or DEFAULT_MODEL,
             "projectName": st.project_name,
             "outputDir": st.output_dir,
             "startedAt": st.started_at,
@@ -339,11 +356,31 @@ class RunManager:
                 st = self._state
                 rp = self._run_paths
             assert rp is not None
-            text = Path(st.input_path).read_text(encoding="utf-8")
-            api_key = os.environ.get("OPENAI_API_KEY")
+
+            if st.input_path.startswith("http://") or st.input_path.startswith("https://"):
+                from .web_crawler import crawl_novel_book
+                logger.info("Crawling novel from URL: %s", st.input_path)
+                book = crawl_novel_book(st.input_path)
+                text_lines = []
+                for ch in book.chapters:
+                    text_lines.append(ch.title)
+                    text_lines.append(ch.text)
+                    text_lines.append("")
+                text = "\n".join(text_lines)
+                with self._lock:
+                    self._state.project_name = book.title
+                st.project_name = book.title
+                logger.info("Crawled %s: %d chapters", book.title, len(book.chapters))
+            else:
+                text = Path(st.input_path).read_text(encoding="utf-8")
+
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            base_url = os.environ.get("OPENAI_BASE_URL", "")
+            if not api_key and not base_url:
+                raise RuntimeError("Either OPENAI_API_KEY or OPENAI_BASE_URL must be set")
             if not api_key:
-                raise RuntimeError("OPENAI_API_KEY not set")
-            base_url = os.environ.get("OPENAI_BASE_URL")
+                api_key = "dummy_for_local"
+            
             api_type = os.environ.get("OPENAI_TYPE", "openai")
             if api_type == "anthropic":
                 primary = AnthropicLLMClient(api_key=api_key, model=st.model, base_url=base_url or "")
@@ -377,6 +414,7 @@ class RunManager:
                 logger=run_log,
                 artifacts_dir=Path(st.output_dir) / "artifacts",
                 stats=sa_stats,
+                refinement_intensity=st.refinement_intensity
             )
             save_json(result, Path(st.output_dir) / "standard_output.json")
 
@@ -393,6 +431,7 @@ class RunManager:
                     narrative_result = run_narrative_analysis(
                         chapter_results=ok_chapters,
                         genre=genre_dict,
+                        book_title=st.project_name,
                         client=client,
                         paths=paths,
                         validator=validator,
@@ -409,13 +448,10 @@ class RunManager:
                 self._state.status = "completed"
                 self._state.updated_at = _utc_now()
             logger.info("Standard analysis completed: run_id=%s output=%s", st.run_id, st.output_dir)
-        except Exception:
+        except Exception as e:
             logger.exception("Pipeline failed")
             with self._lock:
                 self._state.status = "failed"
-                logger.error("Pipeline failed: %s", _tb_mod.format_exc())
-
-
                 self._state.error = f"{type(e).__name__}: {e}"
                 self._state.updated_at = _utc_now()
 
@@ -575,7 +611,7 @@ def _read_settings(mgr: RunManager) -> dict[str, Any]:
     return {
         "apiKeySet": bool(api_key),
         "apiKeyStatus": "已配置" if api_key else "未配置",
-        "model": st.model or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL),
+        "model": os.environ.get("OPENAI_MODEL") or st.model or DEFAULT_MODEL,
         "baseUrl": os.environ.get("OPENAI_BASE_URL", ""),
         "chaptersPerEpisode": st.chapters_per_episode,
         "splitStrategy": st.split_strategy,
@@ -613,6 +649,132 @@ def _read_narrative_analysis(mgr: RunManager) -> dict | None:
         return mgr._read_cached_artifact(str(path))
     except Exception:
         return None
+
+
+def _search_analysis(mgr: RunManager, query: str, scope: list[str] | None = None,
+                     event_type: str | None = None, min_importance: int = 0,
+                     max_importance: int = 5, flags: dict[str, bool] | None = None,
+                     limit: int = 50) -> dict[str, Any]:
+    """Full-text search through standard analysis chapters/events/characters."""
+    data = _read_standard_analysis(mgr)
+    if not data:
+        return {"query": query, "total": 0, "hits": [], "facets": {}}
+
+    q_lower = query.lower()
+    hits: list[dict[str, Any]] = []
+    facets_by_type: dict[str, int] = {}
+    facets_by_event_type: dict[str, int] = {}
+    search_scope = scope or ["chapter", "event", "character"]
+    char_hits: dict[str, dict[str, Any]] = {}
+
+    for ch in data.get("chapters", []):
+        ch_id = ch.get("chapter_id", "")
+        ch_title = ch.get("title", "")
+        ch_summary = ch.get("chapter_summary", "")
+        imp = ch.get("importance_score", 0)
+
+        if "chapter" in search_scope:
+            score = 0
+            if q_lower in (ch_title or "").lower():
+                score += 10
+            if q_lower in (ch_summary or "").lower():
+                score += 5
+            if score > 0:
+                hits.append({
+                    "type": "chapter", "id": ch_id, "title": ch_title,
+                    "snippet": (ch_summary or "")[:200], "score": score + imp,
+                    "chapter_id": ch_id, "chapter_title": ch_title,
+                    "metadata": {"importance_score": imp},
+                })
+                facets_by_type["chapter"] = facets_by_type.get("chapter", 0) + 1
+
+        for ev in ch.get("key_events", []):
+            ev_title = ev.get("title", "")
+            ev_desc = ev.get("description", "")
+            ev_type = ev.get("event_type", "")
+            ev_imp = ev.get("importance", 0)
+            ev_chars = ev.get("characters", [])
+
+            if "event" in search_scope:
+                if event_type and ev_type != event_type:
+                    pass
+                elif ev_imp < min_importance or ev_imp > max_importance:
+                    pass
+                else:
+                    skip = False
+                    if flags:
+                        for fk, fv in flags.items():
+                            if fv and not ev.get(fk, False):
+                                skip = True
+                                break
+                    if not skip:
+                        score = 0
+                        if q_lower in (ev_title or "").lower():
+                            score += 10
+                        if q_lower in (ev_desc or "").lower():
+                            score += 5
+                        if any(q_lower in c.lower() for c in ev_chars):
+                            score += 3
+                        if score > 0:
+                            hits.append({
+                                "type": "event",
+                                "id": ev.get("event_id", f"{ch_id}_{ev_title}"),
+                                "title": ev_title,
+                                "snippet": (ev_desc or "")[:200],
+                                "score": score + ev_imp,
+                                "chapter_id": ch_id, "chapter_title": ch_title,
+                                "metadata": {"event_type": ev_type, "importance": ev_imp, "characters": ev_chars},
+                            })
+                            facets_by_type["event"] = facets_by_type.get("event", 0) + 1
+                            if ev_type:
+                                facets_by_event_type[ev_type] = facets_by_event_type.get(ev_type, 0) + 1
+
+            if "character" in search_scope:
+                for char_name in ev_chars:
+                    if q_lower in char_name.lower():
+                        key = f"char_{char_name}"
+                        if key not in char_hits:
+                            char_hits[key] = {
+                                "type": "character", "id": key, "title": char_name,
+                                "snippet": f"出现于 {ch_title}", "score": 8,
+                                "chapter_id": ch_id, "chapter_title": ch_title,
+                                "metadata": {},
+                            }
+
+    if char_hits:
+        hits.extend(char_hits.values())
+        facets_by_type["character"] = len(char_hits)
+
+    hits.sort(key=lambda x: x["score"], reverse=True)
+    hits = hits[:limit]
+
+    return {
+        "query": query, "total": len(hits), "hits": hits,
+        "facets": {"by_type": facets_by_type, "by_event_type": facets_by_event_type},
+    }
+
+
+def _suggest_analysis(mgr: RunManager, prefix: str, limit: int = 10) -> list[str]:
+    """Return search suggestions from standard analysis data."""
+    data = _read_standard_analysis(mgr)
+    if not data:
+        return []
+    prefix_lower = prefix.lower()
+    suggestions: set[str] = set()
+    for ch in data.get("chapters", []):
+        title = ch.get("title", "")
+        if title and title.lower().startswith(prefix_lower):
+            suggestions.add(title)
+        for ev in ch.get("key_events", []):
+            ev_title = ev.get("title", "")
+            if ev_title and ev_title.lower().startswith(prefix_lower):
+                suggestions.add(ev_title)
+            for c in ev.get("characters", []):
+                if c.lower().startswith(prefix_lower):
+                    suggestions.add(c)
+        if len(suggestions) >= limit * 3:
+            break
+    return sorted(suggestions)[:limit]
 
 
 def _list_runs() -> list[dict[str, Any]]:
@@ -712,8 +874,16 @@ class ApiHandler(BaseHTTPRequestHandler):
         logger.error("%s %s", self.address_string(), format % args)
 
     def _check_auth(self) -> bool:
-        return True
-        self.wfile.write(data)
+        if not _API_TOKEN_CONFIGURED:
+            return True
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer ") and auth_header[7:] == _API_TOKEN:
+            return True
+        self.send_response(HTTPStatus.UNAUTHORIZED)
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": "Unauthorized"}).encode())
         return False
 
     def do_OPTIONS(self) -> None:
@@ -770,6 +940,79 @@ class ApiHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "No standard analysis data"}, status=HTTPStatus.NOT_FOUND)
             return
+            
+        # New Streaming Read endpoints
+        if path == "/api/results/chapter-index":
+            rp = mgr.run_paths
+            if rp and (rp.artifacts_dir / "chapters_index.json").exists():
+                with open(rp.artifacts_dir / "chapters_index.json", "r", encoding="utf-8") as f:
+                    self._send_json(_camelize(json.load(f)))
+            else:
+                self._send_json({"error": "No chapter index found"}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        ch_result_match = re.match(r"^/api/results/chapters/(.+)$", path)
+        if ch_result_match:
+            cid = unquote(ch_result_match.group(1))
+            rp = mgr.run_paths
+            if rp:
+                ch_path = rp.artifacts_dir / "chapters" / f"{cid}.json"
+                if ch_path.exists():
+                    with open(ch_path, "r", encoding="utf-8") as f:
+                        self._send_json(_camelize(json.load(f)))
+                    return
+            self._send_json({"error": "Chapter not processed yet"}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        if path.startswith("/api/export/epub/"):
+            book_id = unquote(path[len("/api/export/epub/"):])
+            meta = _book_index.get_book(book_id)
+            if not meta:
+                self._send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            chapters = _book_index.get_chapters(book_id)
+            if not chapters:
+                self._send_json({"error": "No chapters found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            
+            try:
+                from .export_epub import generate_epub
+            except ImportError:
+                self._send_json({"error": "Export module not loaded"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+                
+            epub_chapters = []
+            for ch in chapters:
+                ch_detail = _book_index.get_chapter_detail(book_id, ch["chapterId"])
+                if ch_detail and ch_detail.get("status") == "ok":
+                    text = ch_detail.get("chapterSummary", "")
+                    events = ch_detail.get("keyEvents", [])
+                    if events:
+                        text += "\n\n【核心推演】\n" + "\n".join("- " + ev.get("description", "") for ev in events)
+                    epub_chapters.append({
+                        "title": ch["title"],
+                        "text": text
+                    })
+            
+            epub_data = generate_epub(meta["title"], meta.get("author", "Unknown"), epub_chapters)
+            
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/epub+zip")
+            from urllib.parse import quote
+            safe_title = quote(meta["title"])
+            self.send_header("Content-Disposition", f'attachment; filename="{safe_title}.epub"')
+            self.end_headers()
+            self.wfile.write(epub_data)
+            return
+
+        # -- Search API --
+        if path == "/api/search/suggestions":
+            qs = parse_qs(parsed.query)
+            prefix = qs.get("prefix", [""])[0]
+            lim = min(int(qs.get("limit", ["10"])[0]), 50)
+            self._send_json({"suggestions": _suggest_analysis(mgr, prefix, lim)})
+            return
+
         # ORPHAN: No frontend consumer, preserved for future use
         if path == "/api/scan/overview":
             self._send_standard_overview(mgr)
@@ -800,6 +1043,11 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/results/narrative":
             data = _read_narrative_analysis(mgr)
+            # Fallback: use project_name if book_synthesis title is missing/placeholder
+            if data:
+                bs = data.get("book_synthesis", {})
+                if bs.get("title") in ("", "未知书名", None):
+                    bs["title"] = mgr.state.project_name or "未知书名"
             if data:
                 self._send_json(_camelize(data))
             else:
@@ -859,6 +1107,43 @@ class ApiHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "Chapter not found"}, status=HTTPStatus.NOT_FOUND)
             return
+            
+        book_wiki_match = re.match(r"^/api/books/([^/]+)/wiki/([^/]+)$", path)
+        if book_wiki_match:
+            book_id = unquote(book_wiki_match.group(1))
+            chapter_id = unquote(book_wiki_match.group(2))
+            
+            chapters = _book_index.get_chapters(book_id)
+            if not chapters:
+                self._send_json({"error": "No chapters"}, status=HTTPStatus.NOT_FOUND)
+                return
+                
+            timeline = []
+            characters = set()
+            
+            for ch in chapters:
+                cid = ch["chapterId"]
+                detail = _book_index.get_chapter_detail(book_id, cid)
+                if detail and detail.get("status") == "ok":
+                    for ev in detail.get("keyEvents", []):
+                        timeline.append({
+                            "chapterId": cid,
+                            "chapterTitle": ch["title"],
+                            "description": ev.get("description", ""),
+                            "characters": ev.get("characters", [])
+                        })
+                        for c in ev.get("characters", []):
+                            characters.add(c)
+                
+                if cid == chapter_id:
+                    break
+                    
+            self._send_json({
+                "characters": sorted(list(characters)),
+                "timeline": timeline
+            })
+            return
+
         book_analysis_match = re.match(r"^/api/books/([^/]+)/analysis/latest$", path)
         if book_analysis_match:
             book_id = unquote(book_analysis_match.group(1))
@@ -869,6 +1154,33 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "No analysis found for this book"}, status=HTTPStatus.NOT_FOUND)
             return
 
+        self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+
+    def do_DELETE(self) -> None:
+        if not self._check_auth():
+            return
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        
+        book_delete_match = re.match(r"^/api/books/([^/]+)$", path)
+        if book_delete_match:
+            book_id = unquote(book_delete_match.group(1))
+            run_dir = _book_index.get_latest_run_dir(book_id)
+            if not run_dir:
+                self._send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            import shutil
+            try:
+                _validate_path_within(str(run_dir), _paths.data_dir, "book delete path")
+                shutil.rmtree(run_dir)
+                _book_index._last_scan_mtime = 0.0  # Force re-scan
+                self._send_json({"ok": True, "deleted": book_id})
+            except ValueError as ve:
+                self._send_json({"error": str(ve)}, status=HTTPStatus.BAD_REQUEST)
+            except OSError as e:
+                self._send_json({"error": f"Failed to delete: {e}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        
         self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -903,6 +1215,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                 chapter_end = payload.get("chapter_end")
                 context_before = payload.get("context_before_chapters", 0)
                 output_dir = payload.get("output_dir", str(_paths.exports_dir))
+                try:
+                    _validate_path_within(output_dir, _paths.exports_dir, "output_dir")
+                except ValueError as ve:
+                    self._send_json({"error": str(ve)}, status=HTTPStatus.BAD_REQUEST)
+                    return
                 # Only crawl the needed range instead of the entire book
                 effective_start = chapter_start or 1
                 effective_end = chapter_end
@@ -929,6 +1246,19 @@ class ApiHandler(BaseHTTPRequestHandler):
                     "json_output": str(json_path),
                     "selected_titles": [ch.title for ch in selected_chapters],
                 })
+                return
+            if path == "/api/search":
+                q = str(payload.get("query", "")).strip()
+                if not q:
+                    self._send_json({"error": "query is required"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                scope = payload.get("scope") or None
+                evt = payload.get("event_type") or None
+                min_imp = int(payload.get("min_importance", 0))
+                max_imp = int(payload.get("max_importance", 5))
+                flgs = payload.get("flags") or None
+                lim = min(int(payload.get("limit", 50)), 200)
+                self._send_json(_search_analysis(mgr, q, scope, evt, min_imp, max_imp, flgs, lim))
                 return
             self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
         except Exception as exc:
@@ -1225,7 +1555,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             "runId": mgr.state.run_id,
             "projectName": mgr.state.project_name,
             "inputName": Path(mgr.state.input_path).name if mgr.state.input_path else "",
-            "model": mgr.state.model,
+            "model": os.environ.get("OPENAI_MODEL") or mgr.state.model or DEFAULT_MODEL,
             "status": mgr.state.status,
             "chapterCount": len(chapters),
             "sceneCount": 0,
@@ -1233,6 +1563,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             "characterCount": len(char_set),
             "episodeCount": 0,
             "failureCount": failed_count,
+            "modelCalls": len(stats_data.get("calls", [])),
             "outputDir": mgr.state.output_dir,
             "startedAt": mgr.state.started_at,
             "updatedAt": mgr.state.updated_at,
@@ -1354,7 +1685,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", allowed)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
 
 
 def _load_env(path: str = ".env") -> None:
@@ -1405,8 +1736,13 @@ def main() -> None:
     _setup_logging()
     _init_cors()
     token = _init_token()
-    logger.info("API Token: %s", token)
-    print("  API Token:", token)
+    token_display = f"{token[:4]}****" if token else "not set"
+    if _API_TOKEN_CONFIGURED:
+        logger.info("API Token (user-configured): %s", token_display)
+        print("  API Token (user-configured):", token_display)
+    else:
+        logger.warning("No API_TOKEN env var — auth disabled (auto-generated token: %s)", token_display)
+        print("  API Token: not configured (auth disabled)")
     server = ThreadingHTTPServer(("127.0.0.1", 8765), ApiHandler)
     logger.info("API server listening on http://127.0.0.1:8765")
     try:

@@ -1,12 +1,15 @@
 import { useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { PipelineStatusResponse } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
 import type { DashboardData, NarrativeResult } from "../lib/types";
 import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
+import { RecentViews } from "../components/quick-actions/RecentViews";
+import type { RecentViewItem } from "../components/quick-actions/RecentViews";
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const statusFetcher = useCallback(() => api.getPipelineStatus(), []);
   const { data: status } = usePolling<PipelineStatusResponse>(statusFetcher, 5000);
 
@@ -21,11 +24,24 @@ export default function DashboardPage() {
   const narrativeEnabled = !!status && pipelineStatus === "completed";
   const { data: narrative } = usePolling<NarrativeResult>(narrativeFetcher, 30_000, narrativeEnabled);
 
+  const handleRecentViewNav = useCallback(
+    (item: RecentViewItem) => {
+      if (item.path) {
+        navigate(item.path);
+      } else if (item.type === "chapter") {
+        navigate("/chapter-analysis");
+      } else if (item.type === "character") {
+        navigate("/characters");
+      }
+    },
+    [navigate],
+  );
+
   if (!status || (pipelineStatus === "idle" && !dash)) {
     return (
       <div className="p-6 space-y-5">
         <h1 className="text-2xl font-semibold text-txt">仪表盘</h1>
-        <EmptyState message="尚未运行任何任务，请前往「任务」页面开始处理。" />
+        <EmptyState message="尚未运行任何任务。前往「书架」选择书籍，或前往「任务」页面开始处理。" />
       </div>
     );
   }
@@ -120,6 +136,8 @@ export default function DashboardPage() {
           </div>
         </Card>
       )}
+
+      <RecentViews maxItems={8} onNavigate={handleRecentViewNav} />
     </div>
   );
 }

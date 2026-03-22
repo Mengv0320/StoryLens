@@ -3,43 +3,85 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f4f7fb;
-  --bg-elevated: #edf2f7;
-  --panel: #ffffff;
-  --panel-soft: #f8fafc;
-  --panel-muted: #f1f5f9;
-  --border: #d8e1ea;
-  --border-strong: #c3ced9;
-  --text: #16202a;
-  --text-soft: #5f6b7a;
-  --text-faint: #8a95a3;
+  /* Clean White Background */
+  --bg: #f8fafc;
+  --bg-gradient: var(--bg);
+  
+  /* Glassmorphism Panels */
+  --panel: rgba(255, 255, 255, 0.75);
+  --panel-soft: rgba(255, 255, 255, 0.5);
+  --panel-muted: rgba(248, 250, 252, 0.6);
+  --panel-blur: blur(20px);
+  
+  /* Modern Borders */
+  --border: rgba(226, 232, 240, 0.5);
+  --border-strong: rgba(203, 213, 225, 0.8);
+  --border-glow: rgba(255, 255, 255, 0.6);
+  
+  /* Text Strategy */
+  --text: #0f172a;
+  --text-soft: #475569;
+  --text-faint: #94a3b8;
   --text-inverse: #ffffff;
-  --accent: #1967d2;
-  --accent-hover: #1557b0;
-  --accent-soft: #e8f0fe;
-  --success: #1f8f5f;
-  --success-soft: #eaf7f0;
-  --warning: #b7791f;
-  --warning-soft: #fff6e5;
-  --danger: #c53b3b;
-  --danger-soft: #fdecec;
-  --info: #3366cc;
-  --info-soft: #eef4ff;
-  --shadow-sm: 0 2px 8px rgba(16,24,40,0.04);
-  --shadow-md: 0 12px 28px rgba(16,24,40,0.08);
-  --shadow-lg: 0 22px 40px rgba(16,24,40,0.12);
+  
+  /* Vibrant Accents */
+  --accent: #3b82f6; /* bright blue */
+  --accent-hover: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.1);
+  --accent-glow: rgba(59, 130, 246, 0.3);
+  
+  /* Semantics - more vivid */
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.1);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.1);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.1);
+  --info: #0ea5e9;
+  --info-soft: rgba(14, 165, 233, 0.1);
+  
+  /* Deep & Glow Shadows (Toned Down) */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05);
+  --shadow-accent: none;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "Inter", "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 玻璃质感基础类 */
+.glass {
+  background: var(--panel);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.glass-card {
+  background: var(--panel);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  border-radius: 1rem;
+  transition: all 0.2s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 #root {

@@ -3,7 +3,7 @@
   "title": "ChapterKeyEvents",
   "description": "Key events extracted directly at chapter level (lite pipeline)",
   "type": "object",
-  "required": ["events"],
+  "required": ["events", "chapter_summary"],
   "properties": {
     "events": {
       "type": "array",

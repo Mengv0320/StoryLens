@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
+import warnings
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class SchemaValidationError(ValueError):
@@ -26,6 +30,17 @@ class SchemaValidator:
         if ref:
             target = self._resolve_ref(root_schema, ref)
             self._validate_node(data, target, path, root_schema)
+            return
+
+        # Handle combination keywords: anyOf, oneOf, allOf
+        if "anyOf" in schema:
+            self._validate_any_of(data, schema["anyOf"], path, root_schema)
+            return
+        if "oneOf" in schema:
+            self._validate_one_of(data, schema["oneOf"], path, root_schema)
+            return
+        if "allOf" in schema:
+            self._validate_all_of(data, schema["allOf"], path, root_schema)
             return
 
         schema_type = schema.get("type")
@@ -109,6 +124,40 @@ class SchemaValidator:
             raise SchemaValidationError(f"{path}: expected number >= {minimum}")
         if maximum is not None and data > maximum:
             raise SchemaValidationError(f"{path}: expected number <= {maximum}")
+
+    def _validate_any_of(self, data: Any, sub_schemas: list[dict[str, Any]], path: str, root_schema: dict[str, Any]) -> None:
+        """At least one sub-schema must validate."""
+        errors: list[str] = []
+        for i, sub in enumerate(sub_schemas):
+            try:
+                self._validate_node(data, sub, f"{path}(anyOf[{i}])", root_schema)
+                return  # first match is enough
+            except SchemaValidationError as e:
+                errors.append(str(e))
+        raise SchemaValidationError(f"{path}: data does not match any of the anyOf schemas: {'; '.join(errors)}")
+
+    def _validate_one_of(self, data: Any, sub_schemas: list[dict[str, Any]], path: str, root_schema: dict[str, Any]) -> None:
+        """Exactly one sub-schema must validate."""
+        match_count = 0
+        last_errors: list[str] = []
+        for i, sub in enumerate(sub_schemas):
+            try:
+                self._validate_node(data, sub, f"{path}(oneOf[{i}])", root_schema)
+                match_count += 1
+            except SchemaValidationError as e:
+                last_errors.append(str(e))
+        if match_count == 0:
+            raise SchemaValidationError(f"{path}: data does not match any of the oneOf schemas: {'; '.join(last_errors)}")
+        if match_count > 1:
+            raise SchemaValidationError(f"{path}: data matches {match_count} schemas but oneOf requires exactly 1")
+
+    def _validate_all_of(self, data: Any, sub_schemas: list[dict[str, Any]], path: str, root_schema: dict[str, Any]) -> None:
+        """All sub-schemas must validate."""
+        for i, sub in enumerate(sub_schemas):
+            try:
+                self._validate_node(data, sub, f"{path}(allOf[{i}])", root_schema)
+            except SchemaValidationError as e:
+                raise SchemaValidationError(f"{path}: allOf[{i}] failed: {e}") from e
 
     def _resolve_ref(self, schema: dict[str, Any], ref: str) -> dict[str, Any]:
         if not ref.startswith("#/"):

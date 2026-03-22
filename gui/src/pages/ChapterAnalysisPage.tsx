@@ -21,9 +21,9 @@ function ChapterCard({ chapter }: { chapter: StandardChapterResult }) {
   const [expanded, setExpanded] = useState(false);
   const events = chapter.keyEvents || [];
   const tags: string[] = [];
-  if (chapter.hasTurningPoint || events.some(e => e.eventType === "turning_point")) tags.push("转折点");
-  if (chapter.hasIdentityReveal || events.some(e => e.involvesIdentityReveal)) tags.push("身份揭露");
-  if (chapter.hasProtagonistEvent || events.some(e => e.involvesProtagonist)) tags.push("主角相关");
+  if (events.some(e => e.eventType === "turning_point")) tags.push("转折点");
+  if (events.some(e => e.involvesIdentityReveal)) tags.push("身份揭露");
+  if (events.some(e => e.involvesProtagonist)) tags.push("主角相关");
 
   return (
     <Card>
@@ -76,7 +76,7 @@ export default function ChapterAnalysisPage() {
   const fetcher = useCallback(() => api.getStandardAnalysis(), []);
   const { data, error } = usePolling<StandardAnalysisResult>(fetcher, 10_000);
 
-  if (error) return <div className="p-6"><div className="rounded-md border border-danger/20 bg-danger-soft/70 p-3 text-sm text-danger">{error}</div></div>;
+  if (error) return <div className="p-6"><EmptyState message="暂无章节分析数据，请先前往「任务」页面完成标准分析。" /></div>;
   if (!data) return <div className="p-6"><EmptyState message="加载中..." /></div>;
 
   const filtered = data.chapters.filter((ch) => ch.importanceScore >= minScore);
@@ -92,7 +92,7 @@ export default function ChapterAnalysisPage() {
           <div><div className="text-txt-soft">类型</div><div className="font-medium text-txt">{genre.primaryGenre}{genre.subgenre ? ` / ${genre.subgenre}` : ""}</div></div>
           <div><div className="text-txt-soft">总章节</div><div className="font-medium text-txt">{data.chapters.length}</div></div>
           <div><div className="text-txt-soft">失败</div><div className="font-medium text-txt">{data.failures.length}</div></div>
-          <div><div className="text-txt-soft">LLM 调用</div><div className="font-medium text-txt">{data.stats?.totalCalls ?? "—"} 次 / 缓存 {data.stats?.cacheHits ?? 0}</div></div>
+          <div><div className="text-txt-soft">LLM 调用</div><div className="font-medium text-txt">{data.stats?.calls?.length ?? "—"} 次</div></div>
         </div>
       </Card>
 

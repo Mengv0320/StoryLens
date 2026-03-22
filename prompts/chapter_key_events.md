@@ -29,6 +29,10 @@
 4 = 重要事件，影响后续走向
 5 = 核心转折，不可省略
 
+### 边界情况处理
+
+- 如果本章全是无意义的注水日常或环境描写，没有任何关键事件，请直接返回 `"events": []` 和较低的 `importance`，不要为了凑数而强行提取事件。
+
 ### 输出格式
 
 严格输出 JSON，不要输出其他内容：
@@ -62,6 +66,36 @@
 - 日常对话、环境描写、重复信息不要提取
 - 所有文本字段用中文
 - event_id 格式：evt_001, evt_002, ...
+
+### Few-Shot 示例
+
+**输入文本示例片段：**
+> 林动深吸一口气，体内的元力运转到极致，一拳轰在石鼎之上。“砰！”石鼎发出一阵沉闷的响声，竟是硬生生地被震退了半步。周围的林家子弟爆发出一阵惊呼，林家家主眼中也闪过一丝不易察觉的赞赏。
+> “好小子，竟然突破到淬体第七重了！”
+
+**期望 JSON 输出示例：**
+```json
+{
+  "events": [
+    {
+      "event_id": "evt_001",
+      "event_type": "status_change",
+      "title": "林动突破淬体七重",
+      "description": "林动在众人面前测试实力，展露出淬体七重的修为，震惊全场。",
+      "characters": ["林动", "林家家主"],
+      "cause": "展现修炼成果",
+      "consequence": "获得家族长辈赞赏与重视",
+      "involves_protagonist": true,
+      "involves_identity_reveal": false,
+      "involves_faction_change": false,
+      "involves_death_or_breakthrough": true,
+      "involves_relationship_change": false,
+      "importance": 4
+    }
+  ],
+  "chapter_summary": "林动在家族测试中展露淬体七重修为，引发震动。"
+}
+```
 
 {{genre_hint}}
 

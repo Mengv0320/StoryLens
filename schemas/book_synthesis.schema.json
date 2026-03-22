@@ -3,13 +3,9 @@
   "title": "BookSynthesis",
   "description": "全书叙事综合分析，包含主线概要、支线追踪、伏笔追踪、角色弧线和节奏曲线",
   "type": "object",
-  "required": ["title", "main_plotline", "subplot_summary", "foreshadowing_tracker", "character_arcs", "tension_curve", "themes", "open_questions", "quality_notes"],
+  "required": ["main_plotline", "subplot_summary", "foreshadowing_tracker", "character_arcs", "tension_curve", "themes", "open_questions", "quality_notes"],
   "additionalProperties": false,
   "properties": {
-    "title": {
-      "type": "string",
-      "description": "推断的书名或'未知书名'"
-    },
     "main_plotline": {
       "type": "string",
       "description": "主线剧情完整概要（200-400字）"

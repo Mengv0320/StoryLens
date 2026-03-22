@@ -20,7 +20,7 @@ export default function ExportsPage() {
               </div>
               <p className="text-sm text-txt-soft mb-2">{item.description}</p>
               {item.exists ? (
-                <p className="text-xs text-success truncate">{item.path}</p>
+                <p className="text-xs text-success truncate">{item.path.replace(/\\/g, '/').split('/').pop()}</p>
               ) : (
                 <p className="text-xs text-txt-soft">文件尚未生成</p>
               )}

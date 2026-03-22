@@ -5,8 +5,10 @@ causal_analysis, and episode generation.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from pathlib import Path
@@ -30,17 +32,35 @@ class ChapterKeyEventExtractor:
 
     _max_tokens = 4096
 
+    # Refinement intensity → prompt injection mapping
+    _REFINEMENT_INSTRUCTIONS: dict[str, str] = {
+        "minimal": (
+            "\n\n【精炼强度：精简模式】\n"
+            "只提取最核心的关键事件（重要度≥4），忽略次要情节。"
+            "每章最多提取3个事件，优先保留：身份揭示、死亡/突破、阵营变动。\n"
+        ),
+        "standard": "",  # default — no extra instruction
+        "detailed": (
+            "\n\n【精炼强度：详细模式】\n"
+            "尽可能全面地提取事件，包括次要情节线索和伏笔。"
+            "每章可提取最多10个事件，注意捕捉：人物心理变化、环境描写暗示、"
+            "伏笔铺垫、关系微妙变化等。\n"
+        ),
+    }
+
     def __init__(
         self,
         client: LLMClient,
         paths: Paths,
         validator: SchemaValidator,
         max_retries: int = 2,
+        refinement_intensity: str = "standard",
     ) -> None:
         self.client = client
         self.paths = paths
         self.validator = validator
         self.max_retries = max_retries
+        self.refinement_intensity = refinement_intensity
 
     def run(self, chapter_text: str, genre_hint: str = "") -> ChapterKeyEventSet:
         prompt = self._build_prompt(chapter_text, genre_hint)
@@ -54,7 +74,8 @@ class ChapterKeyEventExtractor:
     def _build_prompt(self, chapter_text: str, genre_hint: str) -> str:
         template = load_prompt(self.paths.prompts_dir / "chapter_key_events.md")
         hint_block = f"流派提示：{genre_hint}\n" if genre_hint else ""
-        return render_prompt(template, genre_hint=hint_block, text=chapter_text)
+        refinement_block = self._REFINEMENT_INSTRUCTIONS.get(self.refinement_intensity, "")
+        return render_prompt(template, genre_hint=hint_block + refinement_block, text=chapter_text)
 
     def _complete_validated(self, prompt: str, schema_name: str) -> JsonDict:
         current_prompt = prompt
@@ -85,16 +106,21 @@ def _process_chapter(
     stats: PipelineStats | None,
 ) -> dict[str, Any]:
     """Process a single chapter: cache check -> LLM extract -> return result dict."""
-    cache_payload = {"chapter_text": chapter_text[:500], "genre": genre_hint}
+    text_hash = hashlib.sha256(chapter_text.encode()).hexdigest()[:32]
+    cache_payload = {"chapter_text_hash": text_hash, "genre": genre_hint}
 
     # Cache hit?
     if cache is not None:
         cached = cache.get("chapter_key_events", cache_payload)
         if cached is not None:
+            if "raw_text" not in cached:
+                cached["raw_text"] = chapter_text
             return cached
 
     # LLM call
+    call_start = time.time()
     event_set = extractor.run(chapter_text, genre_hint=genre_hint)
+    call_duration = time.time() - call_start
 
     # Record token usage
     if stats is not None:
@@ -105,13 +131,14 @@ def _process_chapter(
                 prompt_tokens=usage.get("prompt_tokens", 0),
                 completion_tokens=usage.get("completion_tokens", 0),
                 total_tokens=usage.get("total_tokens", 0),
-                duration_seconds=0.0,
+                duration_seconds=call_duration,
                 chapter_id=chapter_id,
             )
 
     result = {
         "chapter_id": chapter_id,
         "title": chapter_title,
+        "raw_text": chapter_text,
         "chapter_summary": event_set.chapter_summary,
         "key_events": [asdict(e) for e in event_set.events],
         "status": "ok",
@@ -131,7 +158,8 @@ def run_standard_analysis(
     logger: RunLogger | None = None,
     artifacts_dir: Path | None = None,
     stats: PipelineStats | None = None,
-    max_workers: int = 4,
+    max_workers: int = 4,  # Reserved for future parallel execution; currently sequential
+    refinement_intensity: str = "standard",
 ) -> dict[str, Any]:
     """Run the standard analysis pipeline.
 
@@ -146,6 +174,11 @@ def run_standard_analysis(
     if logger:
         logger.log("standard_chapters_split", count=len(chapters))
 
+    if artifacts_dir is not None:
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        idx_data = [{"chapter_id": ch.chapter_id, "title": ch.title} for ch in chapters]
+        write_artifact(artifacts_dir / "chapters_index.json", idx_data)
+
     if not chapters:
         return {
             "mode": "standard_analysis",
@@ -158,7 +191,9 @@ def run_standard_analysis(
     # 2. Genre classification (use first chapter text)
     genre_classifier = GenreClassifier(client, paths, validator)
     try:
+        genre_start = time.time()
         genre_result = genre_classifier.run(chapters[0].text)
+        genre_duration = time.time() - genre_start
         genre_hint = genre_result.primary_genre
         if stats is not None:
             usage = getattr(client, "last_usage", None)
@@ -168,7 +203,7 @@ def run_standard_analysis(
                     prompt_tokens=usage.get("prompt_tokens", 0),
                     completion_tokens=usage.get("completion_tokens", 0),
                     total_tokens=usage.get("total_tokens", 0),
-                    duration_seconds=0.0,
+                    duration_seconds=genre_duration,
                 )
     except Exception as exc:
         _log.warning("Genre classification failed, proceeding without: %s", exc)
@@ -178,32 +213,66 @@ def run_standard_analysis(
     if logger:
         logger.log("standard_genre", genre=genre_hint)
 
-    # 3. Concurrent key event extraction
-    extractor = ChapterKeyEventExtractor(client, paths, validator)
-    chapter_results: list[dict[str, Any]] = [{}] * len(chapters)
+    # 3. Sequential key event extraction with Sliding Window Context & Stream Output
+    extractor = ChapterKeyEventExtractor(client, paths, validator, refinement_intensity=refinement_intensity)
+    chapter_results: list[dict[str, Any]] = [{} for _ in chapters]
     failures: list[dict[str, Any]] = []
 
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_idx = {}
-        for idx, ch in enumerate(chapters):
-            fut = pool.submit(
-                _process_chapter,
+    if artifacts_dir is not None:
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        write_artifact(artifacts_dir / "genre.json", asdict(genre_result))
+        chapters_dir = artifacts_dir / "chapters"
+        chapters_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        chapters_dir = None
+
+    sliding_window = []
+
+    for idx, ch in enumerate(chapters):
+        try:
+            # Build sliding window context
+            prompt_context = genre_hint
+            if sliding_window:
+                prompt_context += "\n\n【前文提要（防止逻辑断层）】\n" + "\n".join(sliding_window)
+
+            ch_result = _process_chapter(
                 ch.chapter_id,
                 ch.title,
                 ch.text,
                 extractor,
-                genre_hint,
+                prompt_context,
                 cache,
                 stats,
             )
-            future_to_idx[fut] = idx
+            
+            # Rule scoring for single chapter
+            if ch_result.get("status") == "ok":
+                event_objs = [ChapterKeyEvent(**e) for e in ch_result.get("key_events", [])]
+                event_set = ChapterKeyEventSet(
+                    events=event_objs,
+                    chapter_summary=ch_result.get("chapter_summary", ""),
+                )
+                score_out = score_chapter(event_set)
+                ch_result["importance_score"] = score_out["importance_score"]
+                ch_result["importance_reason"] = score_out["importance_reason"]
+                
+                # Update sliding window (keep last 3 chapters)
+                ch_sum = ch_result.get("chapter_summary", "").strip()
+                if ch_sum:
+                    sliding_window.append(f"[{ch.title}] {ch_sum}")
+                    if len(sliding_window) > 3:
+                        sliding_window.pop(0)
+            else:
+                ch_result["importance_score"] = 0
+                ch_result["importance_reason"] = ""
 
-        for fut in as_completed(future_to_idx):
-            idx = future_to_idx[fut]
-            ch = chapters[idx]
-            try:
-                chapter_results[idx] = fut.result()
-            except Exception as exc:
+            chapter_results[idx] = ch_result
+            
+            # Incremental write
+            if chapters_dir is not None:
+                write_artifact(chapters_dir / f"{ch.chapter_id}.json", ch_result)
+
+        except Exception as exc:
                 _log.warning("Chapter %s failed: %s", ch.chapter_id, exc)
                 failure_entry = {
                     "chapter_id": ch.chapter_id,
@@ -211,43 +280,23 @@ def run_standard_analysis(
                     "error": str(exc),
                 }
                 failures.append(failure_entry)
-                chapter_results[idx] = {
+                ch_result = {
                     "chapter_id": ch.chapter_id,
                     "title": ch.title,
                     "chapter_summary": "",
                     "key_events": [],
                     "status": "error",
+                    "importance_score": 0,
+                    "importance_reason": "",
                 }
+                chapter_results[idx] = ch_result
+                if chapters_dir is not None:
+                    write_artifact(chapters_dir / f"{ch.chapter_id}.json", ch_result)
                 if logger:
                     logger.log("standard_chapter_error", chapter_id=ch.chapter_id, error=str(exc))
 
-    # 4. Rule scoring
-    for ch_result in chapter_results:
-        if ch_result.get("status") != "ok":
-            ch_result["importance_score"] = 0
-            ch_result["importance_reason"] = ""
-            continue
-        # Reconstruct ChapterKeyEventSet from raw dicts for the scorer
-        event_objs = [ChapterKeyEvent(**e) for e in ch_result.get("key_events", [])]
-        event_set = ChapterKeyEventSet(
-            events=event_objs,
-            chapter_summary=ch_result.get("chapter_summary", ""),
-        )
-        score_out = score_chapter(event_set)
-        ch_result["importance_score"] = score_out["importance_score"]
-        ch_result["importance_reason"] = score_out["importance_reason"]
-
-    # 5. Write artifacts
-    if artifacts_dir is not None:
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        write_artifact(artifacts_dir / "genre.json", asdict(genre_result))
-        chapters_dir = artifacts_dir / "chapters"
-        chapters_dir.mkdir(parents=True, exist_ok=True)
-        for ch_result in chapter_results:
-            cid = ch_result.get("chapter_id", "unknown")
-            write_artifact(chapters_dir / f"{cid}.json", ch_result)
-        if logger:
-            logger.log("standard_artifacts_written", dir=str(artifacts_dir))
+    if logger and artifacts_dir is not None:
+        logger.log("standard_artifacts_written", dir=str(artifacts_dir))
 
     # 6. Build output
     output = {

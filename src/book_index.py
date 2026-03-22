@@ -55,24 +55,65 @@ class BookIndex:
         return None
 
     def get_chapters(self, book_id: str) -> list[dict[str, Any]] | None:
-        """Return chapter list from the latest run's standard_output.json."""
+        """Return chapter list from the latest run."""
         run_dir = self.get_latest_run_dir(book_id)
         if not run_dir:
             return None
-        data = self._read_standard_output(run_dir)
-        if not data:
-            return None
+            
         chapters = []
-        for ch in data.get("chapters", []):
-            chapters.append({
-                "chapterId": ch.get("chapter_id", ""),
-                "title": ch.get("title", ""),
-                "status": ch.get("status", ""),
-                "importanceScore": ch.get("importance_score", 0),
-                "importanceReason": ch.get("importance_reason", ""),
-                "eventCount": len(ch.get("key_events", [])),
-            })
-        return chapters
+        has_standard = (run_dir / "standard_output.json").exists()
+        if has_standard:
+            data = self._read_standard_output(run_dir)
+            if data:
+                for ch in data.get("chapters", []):
+                    chapters.append({
+                        "chapterId": ch.get("chapter_id", ""),
+                        "title": ch.get("title", ""),
+                        "status": ch.get("status", ""),
+                        "importanceScore": ch.get("importance_score", 0),
+                        "importanceReason": ch.get("importance_reason", ""),
+                        "eventCount": len(ch.get("key_events", [])),
+                    })
+                return chapters
+                
+        # Fallback to stream reading index
+        idx_path = run_dir / "artifacts" / "chapters_index.json"
+        if idx_path.exists():
+            try:
+                idx_list = json.loads(idx_path.read_text(encoding="utf-8"))
+                for entry in idx_list:
+                    cid = entry.get("chapter_id", "")
+                    title = entry.get("title", "")
+                    ch_path = run_dir / "artifacts" / "chapters" / f"{cid}.json"
+                    
+                    status = "pending"
+                    importance_score = 0
+                    importance_reason = ""
+                    event_count = 0
+                    
+                    if ch_path.exists():
+                        try:
+                            ch_data = json.loads(ch_path.read_text(encoding="utf-8"))
+                            status = ch_data.get("status", "ok")
+                            importance_score = ch_data.get("importance_score", 0)
+                            importance_reason = ch_data.get("importance_reason", "")
+                            event_count = len(ch_data.get("key_events", []))
+                        except (json.JSONDecodeError, OSError):
+                            status = "error"
+                            
+                    chapters.append({
+                        "chapterId": cid,
+                        "title": title,
+                        "status": status,
+                        "importanceScore": importance_score,
+                        "importanceReason": importance_reason,
+                        "eventCount": event_count,
+                    })
+                return chapters
+            except (json.JSONDecodeError, OSError):
+                pass
+                
+        return None
 
     def get_chapter_detail(self, book_id: str, chapter_id: str) -> dict[str, Any] | None:
         """Return full chapter data including key_events and raw text if available."""
@@ -109,9 +150,22 @@ class BookIndex:
     # ------------------------------------------------------------------
 
     def _maybe_refresh(self) -> None:
-        """Re-scan if runs directory mtime changed."""
+        """Re-scan if runs directory or any immediate subdirectory mtime changed."""
         try:
-            current_mtime = self._runs_dir.stat().st_mtime if self._runs_dir.is_dir() else 0.0
+            if not self._runs_dir.is_dir():
+                current_mtime = 0.0
+            else:
+                # Check parent dir + all immediate child dirs for mtime changes.
+                # A new file inside a child dir updates the child's mtime,
+                # but not necessarily the parent's.
+                mtimes = [self._runs_dir.stat().st_mtime]
+                for child in self._runs_dir.iterdir():
+                    if child.is_dir():
+                        try:
+                            mtimes.append(child.stat().st_mtime)
+                        except OSError:
+                            pass
+                current_mtime = max(mtimes)
         except OSError:
             current_mtime = 0.0
         if current_mtime != self._last_scan_mtime or not self._books:
@@ -133,7 +187,8 @@ class BookIndex:
                 # Check if this run has output
                 has_standard = (d / "standard_output.json").exists()
                 has_result = (d / "artifacts" / "book_result.json").exists()
-                if not has_standard and not has_result:
+                has_index = (d / "artifacts" / "chapters_index.json").exists()
+                if not has_standard and not has_result and not has_index:
                     continue
 
                 run_info = {
@@ -141,6 +196,7 @@ class BookIndex:
                     "runDir": str(d.resolve()),
                     "hasStandard": has_standard,
                     "hasBookResult": has_result,
+                    "hasIndex": has_index,
                 }
 
                 if book_id not in books:
@@ -151,14 +207,18 @@ class BookIndex:
                 # Use the latest run (sorted order = chronological by creation)
                 meta.latest_run_id = d.name
                 meta.latest_run_dir = str(d.resolve())
-                meta.latest_mode = "standard_analysis" if has_standard else "book"
-                meta.latest_status = "completed"
+                meta.latest_mode = "standard_analysis" if has_standard or has_index else "book"
+                meta.latest_status = "completed" if has_standard or has_result else "running"
 
-                # Read chapter count from standard_output
+                # Read chapter count (lightweight — avoid full JSON parse)
                 if has_standard:
-                    so = self._read_standard_output(d)
-                    if so:
-                        meta.chapter_count = len(so.get("chapters", []))
+                    meta.chapter_count = self._count_chapters_fast(d / "standard_output.json")
+                elif has_index:
+                    try:
+                        idx_list = json.loads((d / "artifacts" / "chapters_index.json").read_text(encoding="utf-8"))
+                        meta.chapter_count = len(idx_list)
+                    except (json.JSONDecodeError, OSError):
+                        pass
 
         # 2. Enrich from exports
         self._enrich_from_exports(books)
@@ -234,6 +294,20 @@ class BookIndex:
         if len(fingerprint) >= 8 and all(c in "0123456789abcdef" for c in fingerprint):
             return (fingerprint, project_name)
         return ("", "")
+
+    @staticmethod
+    def _count_chapters_fast(path: Path) -> int:
+        """Count chapters without full JSON deserialization.
+
+        Counts occurrences of ``"chapter_id"`` keys in the raw text, which is
+        much cheaper than loading the entire JSON tree into memory just for a
+        count.
+        """
+        try:
+            text = path.read_text(encoding="utf-8")
+            return text.count('"chapter_id"')
+        except OSError:
+            return 0
 
     @staticmethod
     def _read_standard_output(run_dir: Path) -> dict[str, Any] | None:

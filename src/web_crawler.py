@@ -46,8 +46,11 @@ LIKELY_CONTENT_RE = re.compile(r"(content|article|chapter|text|read|main|entry|p
 NOISE_RE = re.compile(r"(nav|menu|header|footer|comment|share|tool|login|sign|ad|banner|copyright)", re.IGNORECASE)
 WHITESPACE_RE = re.compile(r"\s+")
 SPAM_WATERMARK_RE = re.compile(
-    r"xiuxi8\s*Θcom|bqglpヽcc|haiyue8♜cc"
-    r"|[a-zA-Z0-9]{3,12}[\s]*[Θ♜ヽ][a-zA-Z]{2,5}",
+    # Obfuscated pirate-site watermarks: alphanum + unicode "dot" separator + domain suffix
+    r"[a-zA-Z0-9]{2,15}"
+    r"\s*[·•．點点★☆○●◎Θ♜ヽ▪♦◇♠♣♥§※⊙△▲◆■□]\s*"
+    r"(?:cc|com|net|org|cn|info|xyz|me|top)",
+    re.IGNORECASE,
 )
 
 

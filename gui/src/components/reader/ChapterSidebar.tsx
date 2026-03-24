@@ -4,11 +4,12 @@ type Props = {
   chapters: Chapter[];
   selectedId: string;
   onSelect: (id: string) => void;
+  mobile?: boolean;
 };
 
-export default function ChapterSidebar({ chapters, selectedId, onSelect }: Props) {
+export default function ChapterSidebar({ chapters, selectedId, onSelect, mobile }: Props) {
   return (
-    <div className="w-56 shrink-0 border-r border-border overflow-y-auto">
+    <div className={mobile ? "w-full overflow-y-auto" : "w-56 shrink-0 border-r border-border overflow-y-auto"}>
       <div className="p-3 text-xs font-medium text-txt-soft uppercase tracking-wide">章节目录</div>
       <div className="space-y-0.5 pb-4">
         {chapters.map((ch) => {

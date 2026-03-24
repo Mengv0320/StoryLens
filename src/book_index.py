@@ -194,9 +194,11 @@ class BookIndex:
             for d in sorted(self._runs_dir.iterdir()):
                 if not d.is_dir():
                     continue
-                book_id, project_name = self._parse_run_dir_name(d.name)
-                if not book_id:
+                fingerprint, project_name = self._parse_run_dir_name(d.name)
+                if not fingerprint:
                     continue
+                # Use project_name as book_id so same-title runs merge
+                book_id = project_name
                 # Check if this run has output
                 has_standard = (d / "standard_output.json").exists()
                 has_result = (d / "artifacts" / "book_result.json").exists()
@@ -310,16 +312,11 @@ class BookIndex:
 
     @staticmethod
     def _count_chapters_fast(path: Path) -> int:
-        """Count chapters without full JSON deserialization.
-
-        Counts occurrences of ``"chapter_id"`` keys in the raw text, which is
-        much cheaper than loading the entire JSON tree into memory just for a
-        count.
-        """
+        """Count chapters by parsing the top-level 'chapters' array length."""
         try:
-            text = path.read_text(encoding="utf-8")
-            return text.count('"chapter_id"')
-        except OSError:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return len(data.get("chapters", []))
+        except (json.JSONDecodeError, OSError):
             return 0
 
     @staticmethod

@@ -136,7 +136,7 @@ export default function CrawlWorkflow(props: Props) {
               <input
                 value={bookUrl}
                 onChange={(event) => { setBookUrl(event.target.value); setUrlError(null); }}
-                className={`h-11 rounded-md border bg-white px-3 text-sm outline-none focus:border-accent ${urlError ? "border-danger" : "border-border"}`}
+                className={`h-11 rounded-md border bg-panel px-3 text-sm outline-none focus:border-accent ${urlError ? "border-danger" : "border-border"}`}
                 placeholder="https://www.bqg128.cc/book/17322/"
               />
               {urlError && <span className="text-xs text-danger">{urlError}</span>}
@@ -146,7 +146,7 @@ export default function CrawlWorkflow(props: Props) {
               <input
                 value={outputDir}
                 onChange={(event) => setOutputDir(event.target.value)}
-                className="h-11 rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-accent"
+                className="h-11 rounded-md border border-border bg-panel px-3 text-sm outline-none focus:border-accent"
                 placeholder="data/exports"
               />
             </label>
@@ -192,7 +192,7 @@ export default function CrawlWorkflow(props: Props) {
                   <select
                     value={chapterStart}
                     onChange={(event) => { setChapterStart(Number(event.target.value)); setRangeError(null); }}
-                    className="h-10 rounded-md border border-border bg-white px-3 text-sm"
+                    className="h-10 rounded-md border border-border bg-panel px-3 text-sm"
                   >
                     {book.chapters.map((chapter) => (
                       <option key={chapter.chapter_id} value={chapter.index}>
@@ -207,7 +207,7 @@ export default function CrawlWorkflow(props: Props) {
                   <select
                     value={chapterEnd}
                     onChange={(event) => { setChapterEnd(Number(event.target.value)); setRangeError(null); }}
-                    className="h-10 rounded-md border border-border bg-white px-3 text-sm"
+                    className="h-10 rounded-md border border-border bg-panel px-3 text-sm"
                   >
                     {book.chapters.map((chapter) => (
                       <option key={chapter.chapter_id} value={chapter.index}>
@@ -224,7 +224,7 @@ export default function CrawlWorkflow(props: Props) {
                     min={0}
                     value={contextBefore}
                     onChange={(event) => setContextBefore(Number(event.target.value))}
-                    className="h-10 rounded-md border border-border bg-white px-3 text-sm"
+                    className="h-10 rounded-md border border-border bg-panel px-3 text-sm"
                   />
                 </label>
               </div>
@@ -267,7 +267,7 @@ export default function CrawlWorkflow(props: Props) {
               <input
                 value={chapterFilter}
                 onChange={(event) => setChapterFilter(event.target.value)}
-                className="h-9 w-52 rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-accent"
+                className="h-9 w-52 rounded-md border border-border bg-panel px-3 text-sm outline-none focus:border-accent"
                 placeholder="筛选章节标题"
               />
             }

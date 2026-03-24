@@ -1,9 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { api } from "../lib/api";
 import type { StandardAnalysisResult, StandardChapterResult } from "../lib/types";
 import { usePolling } from "../lib/usePolling";
 import { useActiveBook } from "../lib/useActiveBook";
-import { Card, SectionHeader, EmptyState, Badge } from "../components/primitives";
+import { Card, SectionHeader, EmptyState, Badge, SkeletonCard } from "../components/primitives";
+import { displayEventType } from "../lib/eventTypes";
+import { useShowMore } from "../hooks/useShowMore";
 
 const IMPORTANCE_COLORS: Record<number, string> = {
   5: "bg-danger/20 text-danger",
@@ -22,7 +24,7 @@ function ChapterCard({ chapter }: { chapter: StandardChapterResult }) {
   const [expanded, setExpanded] = useState(false);
   const events = chapter.keyEvents || [];
   const tags: string[] = [];
-  if (events.some(e => e.eventType === "turning_point")) tags.push("转折点");
+  if (events.some(e => e.eventType === "转折" || e.eventType === "turning_point")) tags.push("转折点");
   if (events.some(e => e.involvesIdentityReveal)) tags.push("身份揭露");
   if (events.some(e => e.involvesProtagonist)) tags.push("主角相关");
 
@@ -56,7 +58,7 @@ function ChapterCard({ chapter }: { chapter: StandardChapterResult }) {
           {events.map((ev) => (
             <div key={ev.eventId} className="text-sm">
               <div className="flex items-center gap-2">
-                <span className="px-1.5 py-0.5 rounded bg-panel-soft text-xs text-txt-soft">{ev.eventType}</span>
+                <span className="px-1.5 py-0.5 rounded bg-panel-soft text-xs text-txt-soft">{displayEventType(ev.eventType)}</span>
                 <span className="font-medium text-txt">{ev.title}</span>
                 <span className="text-xs text-txt-soft">重要性 {ev.importance}</span>
               </div>
@@ -83,14 +85,25 @@ export default function ChapterAnalysisPage() {
   );
   const { data, error } = usePolling<StandardAnalysisResult>(fetcher, 10_000);
 
-  if (error) return <div className="p-6"><EmptyState message="暂无章节分析数据，请先前往「任务」页面完成标准分析。" /></div>;
-  if (!data) return <div className="p-6"><EmptyState message="加载中..." /></div>;
+  const filtered = data ? data.chapters.filter((ch) => ch.importanceScore >= minScore) : [];
+  const { visible: visibleChapters, hasMore, showMore, reset, total } = useShowMore(filtered, 30);
 
-  const filtered = data.chapters.filter((ch) => ch.importanceScore >= minScore);
+  useEffect(() => { reset(); }, [activeBook?.bookId, reset]);
+
+  if (error) return <div className="p-4 md:p-6"><EmptyState message="暂无章节分析数据，请先前往「任务」页面完成标准分析。" /></div>;
+  if (!data) return (
+    <div className="p-4 md:p-6 space-y-5">
+      <h1 className="text-2xl font-semibold text-txt">章节分析</h1>
+      <div className="space-y-3">
+        {Array.from({ length: 4 }, (_, i) => <SkeletonCard key={i} />)}
+      </div>
+    </div>
+  );
+
   const genre = data.genre;
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">章节分析</h1>
 
       <Card>
@@ -105,7 +118,7 @@ export default function ChapterAnalysisPage() {
 
       <div className="flex items-center gap-3">
         <span className="text-sm text-txt-soft">最低重要性</span>
-        <select value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="h-8 rounded border border-border bg-white px-2 text-sm">
+        <select value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="h-8 rounded border border-border bg-panel px-2 text-sm">
           <option value={1}>全部 (1+)</option>
           <option value={2}>2+</option>
           <option value={3}>3+</option>
@@ -118,9 +131,14 @@ export default function ChapterAnalysisPage() {
       <div className="space-y-3">
         {filtered.length === 0 ? (
           <EmptyState message="没有符合筛选条件的章节。" />
-        ) : (
-          filtered.map((ch) => <ChapterCard key={ch.chapterId} chapter={ch} />)
-        )}
+        ) : (<>
+          {visibleChapters.map((ch) => <ChapterCard key={ch.chapterId} chapter={ch} />)}
+          {hasMore && (
+            <button type="button" onClick={showMore} className="w-full py-2 text-sm text-accent hover:underline">
+              加载更多（已显示 {visibleChapters.length}/{total}）
+            </button>
+          )}
+        </>)}
       </div>
     </div>
   );

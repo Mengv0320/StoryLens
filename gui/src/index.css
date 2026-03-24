@@ -3,34 +3,54 @@
 @tailwind utilities;
 
 :root {
-  /* Clean White Background */
+  color-scheme: light;
+  /* === Tailwind color channels (R G B) === */
+  --c-bg: 244 247 251;
+  --c-bg-elevated: 237 242 247;
+  --c-panel: 255 255 255;
+  --c-panel-soft: 248 250 252;
+  --c-panel-muted: 241 245 249;
+  --c-border: 216 225 234;
+  --c-border-strong: 195 206 217;
+  --c-txt: 22 32 42;
+  --c-txt-soft: 95 107 122;
+  --c-txt-faint: 138 149 163;
+  --c-txt-inverse: 255 255 255;
+  --c-accent: 25 103 210;
+  --c-accent-hover: 21 87 176;
+  --c-accent-soft: 232 240 254;
+  --c-success: 31 143 95;
+  --c-success-soft: 234 247 240;
+  --c-warning: 183 121 31;
+  --c-warning-soft: 255 246 229;
+  --c-danger: 197 59 59;
+  --c-danger-soft: 253 236 236;
+  --c-info: 51 102 204;
+  --c-info-soft: 238 244 255;
+
+  /* === Glass / Shadow variables === */
   --bg: #f8fafc;
   --bg-gradient: var(--bg);
-  
-  /* Glassmorphism Panels */
+
   --panel: rgba(255, 255, 255, 0.75);
   --panel-soft: rgba(255, 255, 255, 0.5);
   --panel-muted: rgba(248, 250, 252, 0.6);
   --panel-blur: blur(20px);
-  
-  /* Modern Borders */
+
   --border: rgba(226, 232, 240, 0.5);
   --border-strong: rgba(203, 213, 225, 0.8);
   --border-glow: rgba(255, 255, 255, 0.6);
-  
-  /* Text Strategy */
+
   --text: #0f172a;
   --text-soft: #475569;
   --text-faint: #94a3b8;
   --text-inverse: #ffffff;
-  
-  /* Vibrant Accents */
-  --accent: #3b82f6; /* bright blue */
+
+  --accent: #3b82f6;
   --accent-hover: #2563eb;
   --accent-soft: rgba(59, 130, 246, 0.1);
   --accent-glow: rgba(59, 130, 246, 0.3);
-  
-  /* Semantics - more vivid */
+
   --success: #10b981;
   --success-soft: rgba(16, 185, 129, 0.1);
   --warning: #f59e0b;
@@ -39,11 +59,74 @@
   --danger-soft: rgba(239, 68, 68, 0.1);
   --info: #0ea5e9;
   --info-soft: rgba(14, 165, 233, 0.1);
-  
-  /* Deep & Glow Shadows (Toned Down) */
+
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05);
+  --shadow-accent: none;
+}
+
+.dark {
+  color-scheme: dark;
+  /* === Tailwind color channels (dark) === */
+  --c-bg: 15 23 42;
+  --c-bg-elevated: 30 41 59;
+  --c-panel: 30 41 59;
+  --c-panel-soft: 51 65 85;
+  --c-panel-muted: 71 85 105;
+  --c-border: 71 85 105;
+  --c-border-strong: 100 116 139;
+  --c-txt: 241 245 249;
+  --c-txt-soft: 148 163 184;
+  --c-txt-faint: 100 116 139;
+  --c-txt-inverse: 15 23 42;
+  --c-accent: 96 165 250;
+  --c-accent-hover: 59 130 246;
+  --c-accent-soft: 23 37 84;
+  --c-success: 52 211 153;
+  --c-success-soft: 6 78 59;
+  --c-warning: 251 191 36;
+  --c-warning-soft: 69 26 3;
+  --c-danger: 248 113 113;
+  --c-danger-soft: 127 29 29;
+  --c-info: 56 189 248;
+  --c-info-soft: 12 74 110;
+
+  /* === Glass / Shadow variables (dark) === */
+  --bg: #0f172a;
+  --bg-gradient: var(--bg);
+
+  --panel: rgba(30, 41, 59, 0.75);
+  --panel-soft: rgba(30, 41, 59, 0.5);
+  --panel-muted: rgba(51, 65, 85, 0.6);
+  --panel-blur: blur(20px);
+
+  --border: rgba(71, 85, 105, 0.5);
+  --border-strong: rgba(100, 116, 139, 0.8);
+  --border-glow: rgba(30, 41, 59, 0.6);
+
+  --text: #f1f5f9;
+  --text-soft: #94a3b8;
+  --text-faint: #64748b;
+  --text-inverse: #0f172a;
+
+  --accent: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-soft: rgba(96, 165, 250, 0.1);
+  --accent-glow: rgba(96, 165, 250, 0.3);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.1);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.1);
+  --info: #38bdf8;
+  --info-soft: rgba(56, 189, 248, 0.1);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3);
   --shadow-accent: none;
 }
 
@@ -88,4 +171,5 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }

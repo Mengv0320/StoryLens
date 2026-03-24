@@ -8,6 +8,9 @@ from .models import ChapterKeyEvent, ChapterKeyEventSet
 # --- weights & bonuses ---
 
 _TYPE_WEIGHT: dict[str, float] = {
+    "转折": 1.5,
+    "伏笔回收": 1.5,
+    # Legacy English keys (backward compat with old data)
     "turning_point": 1.5,
     "payoff": 1.5,
 }
@@ -23,6 +26,8 @@ _BOOL_BONUS: list[tuple[str, float, str]] = [
 ]
 
 _EVENT_TYPE_BONUS: list[tuple[str, float, str]] = [
+    ("转折", 0.3, "含转折点事件"),
+    ("伏笔回收", 0.2, "含伏笔回收"),
     ("turning_point", 0.3, "含转折点事件"),
     ("payoff", 0.2, "含伏笔回收"),
 ]
@@ -84,7 +89,7 @@ def score_chapter(events: ChapterKeyEventSet) -> dict:
         "importance_reason": reason,
         "event_count": len(events.events),
         "has_protagonist_event": any(ev.involves_protagonist for ev in events.events),
-        "has_turning_point": any(ev.event_type == "turning_point" for ev in events.events),
+        "has_turning_point": any(ev.event_type in ("转折", "turning_point") for ev in events.events),
         "has_identity_reveal": any(ev.involves_identity_reveal for ev in events.events),
     }
 

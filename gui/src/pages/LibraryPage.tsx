@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { SectionHeader, EmptyState } from "../components/primitives";
+import { SectionHeader, EmptyState, SkeletonCard } from "../components/primitives";
 import BookGrid from "../components/library/BookGrid";
 import { usePolling } from "../lib/usePolling";
 import { api } from "../lib/api";
@@ -16,24 +16,42 @@ export default function LibraryPage() {
 
   const fetcher = useCallback(() => api.getBooks(), []);
   const { data: apiBooks, error } = usePolling<BookListItem[]>(fetcher, 15_000);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
-  const books: BookListItem[] = apiBooks ?? [];
+  const books: BookListItem[] = useMemo(
+    () => (apiBooks ?? []).filter((b) => !deletedIds.has(b.bookId)),
+    [apiBooks, deletedIds],
+  );
+
+  // Clear optimistic deletes once server confirms removal
+  useEffect(() => {
+    if (apiBooks && deletedIds.size > 0) {
+      const freshIds = new Set(apiBooks.map((b) => b.bookId));
+      setDeletedIds((prev) => {
+        const next = new Set([...prev].filter((id) => freshIds.has(id)));
+        return next.size === prev.size ? prev : next;
+      });
+    }
+  }, [apiBooks, deletedIds.size]);
 
   const filtered = useMemo(
     () => (filter === "all" ? books : books.filter((b) => (b.latestStatus || "idle") === filter)),
     [filter, books],
   );
 
-  const handleAction = (bookId: string, action: string) => {
+  const handleAction = async (bookId: string, action: string) => {
     if (action === "view" || action === "start") {
       navigate(`/book/${bookId}`);
     } else if (action === "retry") {
       navigate(`/book/${bookId}`);
+    } else if (action === "delete") {
+      setDeletedIds((prev) => new Set(prev).add(bookId));
+      try { await api.deleteBook(bookId); } catch { /* reappears on next poll if failed */ }
     }
   };
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <SectionHeader
         title="书架"
         extra={
@@ -67,8 +85,12 @@ export default function LibraryPage() {
       </div>
 
       {/* content */}
-      {filtered.length === 0 ? (
-        <EmptyState message={books.length === 0 ? (error ? "加载失败，请检查后端连接" : "加载中...") : "没有符合条件的书籍"} />
+      {!apiBooks && !error ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }, (_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState message={books.length === 0 ? (error ? "加载失败，请检查后端连接" : "书架为空") : "没有符合条件的书籍"} />
       ) : (
         <BookGrid books={filtered} onAction={handleAction} />
       )}

@@ -1,18 +1,50 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        bg: { DEFAULT: "#f4f7fb", elevated: "#edf2f7" },
-        panel: { DEFAULT: "#ffffff", soft: "#f8fafc", muted: "#f1f5f9" },
-        border: { DEFAULT: "#d8e1ea", strong: "#c3ced9" },
-        txt: { DEFAULT: "#16202a", soft: "#5f6b7a", faint: "#8a95a3", inverse: "#ffffff" },
-        accent: { DEFAULT: "#1967d2", hover: "#1557b0", soft: "#e8f0fe" },
-        success: { DEFAULT: "#1f8f5f", soft: "#eaf7f0" },
-        warning: { DEFAULT: "#b7791f", soft: "#fff6e5" },
-        danger: { DEFAULT: "#c53b3b", soft: "#fdecec" },
-        info: { DEFAULT: "#3366cc", soft: "#eef4ff" },
+        bg: {
+          DEFAULT: "rgb(var(--c-bg) / <alpha-value>)",
+          elevated: "rgb(var(--c-bg-elevated) / <alpha-value>)",
+        },
+        panel: {
+          DEFAULT: "rgb(var(--c-panel) / <alpha-value>)",
+          soft: "rgb(var(--c-panel-soft) / <alpha-value>)",
+          muted: "rgb(var(--c-panel-muted) / <alpha-value>)",
+        },
+        border: {
+          DEFAULT: "rgb(var(--c-border) / <alpha-value>)",
+          strong: "rgb(var(--c-border-strong) / <alpha-value>)",
+        },
+        txt: {
+          DEFAULT: "rgb(var(--c-txt) / <alpha-value>)",
+          soft: "rgb(var(--c-txt-soft) / <alpha-value>)",
+          faint: "rgb(var(--c-txt-faint) / <alpha-value>)",
+          inverse: "rgb(var(--c-txt-inverse) / <alpha-value>)",
+        },
+        accent: {
+          DEFAULT: "rgb(var(--c-accent) / <alpha-value>)",
+          hover: "rgb(var(--c-accent-hover) / <alpha-value>)",
+          soft: "rgb(var(--c-accent-soft) / <alpha-value>)",
+        },
+        success: {
+          DEFAULT: "rgb(var(--c-success) / <alpha-value>)",
+          soft: "rgb(var(--c-success-soft) / <alpha-value>)",
+        },
+        warning: {
+          DEFAULT: "rgb(var(--c-warning) / <alpha-value>)",
+          soft: "rgb(var(--c-warning-soft) / <alpha-value>)",
+        },
+        danger: {
+          DEFAULT: "rgb(var(--c-danger) / <alpha-value>)",
+          soft: "rgb(var(--c-danger-soft) / <alpha-value>)",
+        },
+        info: {
+          DEFAULT: "rgb(var(--c-info) / <alpha-value>)",
+          soft: "rgb(var(--c-info-soft) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: ['"Noto Sans SC"', '"Source Han Sans SC"', '"PingFang SC"', '"Microsoft YaHei"', "sans-serif"],

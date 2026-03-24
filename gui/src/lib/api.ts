@@ -5,7 +5,9 @@ import type {
   StandardAnalysisResult,
   NarrativeResult, GroupSummary, BookSynthesis,
   BookListItem, BookChapter, BookChapterDetail, BookLatestAnalysis,
+  Segment, ReadingGuide,
 } from "./types";
+import { reportFetchResult } from "./useNetworkStatus";
 
 const BASE = "";
 
@@ -26,8 +28,11 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    const res = await fetch(input, { ...init, signal: controller.signal });
+    reportFetchResult(true);
+    return res;
   } catch (err) {
+    reportFetchResult(false);
     if (controller.signal.aborted) {
       throw new Error(`请求超时 (${timeoutMs / 1000}s): ${input}`);
     }
@@ -95,6 +100,7 @@ export const api = {
     chapterEnd?: number;
     options?: any;
   }) => postJson<{ runId: string; status: string }>("/api/pipeline/start", config),
+  stopPipeline: () => postJson<{ ok: boolean; message: string }>("/api/pipeline/stop", {}),
   getPipelineStatus: () => getJson<PipelineStatusResponse>("/api/pipeline/status"),
 
   // Dashboard
@@ -149,6 +155,12 @@ export const api = {
     getJson<CharacterDetail>(`/api/books/${encodeURIComponent(bookId)}/characters/${encodeURIComponent(charId)}`),
   getBookTimeline: (bookId: string) =>
     getJson<TimelineItem[]>(`/api/books/${encodeURIComponent(bookId)}/timeline`),
+
+  // Segments / Reading Guide
+  getSegments: (bookId: string) =>
+    getJson<Segment[]>(`/api/books/${encodeURIComponent(bookId)}/segments`),
+  getReadingGuide: (bookId: string) =>
+    getJson<ReadingGuide>(`/api/books/${encodeURIComponent(bookId)}/reading-guide`),
 
   // Crawl
   crawlInspect: (bookUrl: string) =>

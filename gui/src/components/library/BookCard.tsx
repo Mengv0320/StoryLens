@@ -5,6 +5,7 @@ import { getStatusBadge, getModeLabel, formatTime } from "../../features/library
 import type { BookListItem } from "../../lib/types";
 import { BookOpen, Play, RotateCw, Trash2, Sparkles } from "lucide-react";
 import { api } from "../../lib/api";
+import { useActiveBook } from "../../lib/useActiveBook";
 
 type Props = {
   book: BookListItem;
@@ -16,6 +17,7 @@ export default function BookCard({ book, onAction }: Props) {
   const badge = getStatusBadge(status);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { activeBook, setActiveBook } = useActiveBook();
 
   useEffect(() => {
     return () => { if (deleteTimer.current) clearTimeout(deleteTimer.current); };
@@ -32,6 +34,10 @@ export default function BookCard({ book, onAction }: Props) {
     setDeleteConfirm(false);
     try {
       await api.deleteBook(book.bookId);
+      // If the deleted book was the active book, clear it immediately
+      if (activeBook?.bookId === book.bookId) {
+        setActiveBook(null);
+      }
       onAction?.(book.bookId, "deleted");
     } catch (err) {
       toast(`删除失败：${err instanceof Error ? err.message : "未知错误"}`, "error");

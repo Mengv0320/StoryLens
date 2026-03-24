@@ -3,12 +3,20 @@ import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
 import { useActiveBook } from "../lib/useActiveBook";
 import type { CharacterDetail } from "../lib/types";
-import { Card, SectionHeader, Badge, EmptyState, KeyValue } from "../components/primitives";
+import { Card, SectionHeader, Badge, EmptyState, KeyValue, SkeletonLine } from "../components/primitives";
+
+import { useShowMore } from "../hooks/useShowMore";
 
 const relVariant: Record<string, "danger" | "warning" | "success" | "info" | "accent" | "default"> = {
   hostile: "danger", suspicious: "warning", allied: "success",
   subordinate: "info", mentor: "accent", family: "accent",
-  romantic: "accent", unknown: "default",
+  romantic: "accent", rival: "warning", "co-occurrence": "default", unknown: "default",
+};
+
+const relLabel: Record<string, string> = {
+  hostile: "敌对", suspicious: "猜疑", allied: "同盟",
+  subordinate: "从属", mentor: "师徒", family: "亲属",
+  romantic: "恋人", rival: "对手", "co-occurrence": "同章出现", unknown: "未知",
 };
 
 export default function CharactersPage() {
@@ -21,6 +29,8 @@ export default function CharactersPage() {
     () => activeBook ? api.getBookCharacters(activeBook.bookId) : api.getCharacters(),
     10_000,
   );
+  const { visible: visibleChars, hasMore, showMore, reset, total } = useShowMore(characters ?? [], 30);
+  useEffect(() => { reset(); }, [activeBook?.bookId, reset]);
 
   useEffect(() => {
     if (!selectedId) { setDetail(null); return; }
@@ -37,30 +47,39 @@ export default function CharactersPage() {
   }, [selectedId, activeBook?.bookId]);
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">角色</h1>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="md:col-span-1">
           <Card>
             <SectionHeader title="角色列表" />
             <div className="space-y-1 max-h-[60vh] overflow-y-auto">
-              {!characters?.length ? (
+              {!characters ? (
+                <div className="space-y-2 py-2">{Array.from({ length: 8 }, (_, i) => <SkeletonLine key={i} />)}</div>
+              ) : !characters.length ? (
                 <EmptyState message="暂无角色数据" />
-              ) : characters.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedId(c.id)}
-                  className={`w-full text-left p-2 rounded text-sm flex items-center justify-between gap-2 ${
-                    selectedId === c.id ? "bg-accent-soft border border-accent" : "hover:bg-panel-muted border border-transparent"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <span className="text-txt font-medium">{c.name}</span>
-                    {c.faction && <Badge label={c.faction} variant="info" />}
-                    <div className="text-xs text-txt-soft">别名 {c.aliasCount} · 事件 {c.eventCount}</div>
-                  </div>
-                </button>
-              ))}
+              ) : (<>
+                {visibleChars.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedId(c.id)}
+                    className={`w-full text-left p-2 rounded text-sm flex items-center justify-between gap-2 ${
+                      selectedId === c.id ? "bg-accent-soft border border-accent" : "hover:bg-panel-muted border border-transparent"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <span className="text-txt font-medium">{c.name}</span>
+                      {c.faction && <Badge label={c.faction} variant="info" />}
+                      <div className="text-xs text-txt-soft">别名 {c.aliasCount} · 事件 {c.eventCount}</div>
+                    </div>
+                  </button>
+                ))}
+                {hasMore && (
+                  <button type="button" onClick={showMore} className="w-full py-2 text-sm text-accent hover:underline">
+                    加载更多（已显示 {visibleChars.length}/{total}）
+                  </button>
+                )}
+              </>)}
             </div>
           </Card>
         </div>
@@ -71,7 +90,7 @@ export default function CharactersPage() {
             {!selectedId ? (
               <EmptyState message="选择左侧角色查看详情" />
             ) : detailLoading ? (
-              <div className="py-8 text-center text-txt-soft text-sm">加载中...</div>
+              <div className="space-y-3 py-4">{Array.from({ length: 6 }, (_, i) => <SkeletonLine key={i} />)}</div>
             ) : !detail ? (
               <EmptyState message="无法加载详情" />
             ) : (
@@ -92,7 +111,7 @@ export default function CharactersPage() {
                     <div className="space-y-1">
                       {detail.relationships.map((r, i) => (
                         <div key={i} className="flex items-center gap-2 text-sm py-1 border-b border-border/50">
-                          <Badge label={r.relationType} variant={relVariant[r.relationType] ?? "default"} />
+                          <Badge label={relLabel[r.relationType] ?? r.relationType} variant={relVariant[r.relationType] ?? "default"} />
                           <span className="text-txt font-medium">{r.targetName}</span>
                           {r.note && <span className="text-txt-soft text-xs">— {r.note}</span>}
                         </div>

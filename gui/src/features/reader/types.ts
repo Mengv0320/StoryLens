@@ -24,6 +24,7 @@ export type KeyEvent = {
   description: string;
   importance: number;
   characters: string[];
+  anchorText?: string;
   anchorOffset: number;
 };
 

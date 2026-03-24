@@ -3,7 +3,7 @@
   "title": "ChapterKeyEvents",
   "description": "Key events extracted directly at chapter level (lite pipeline)",
   "type": "object",
-  "required": ["events", "chapter_summary"],
+  "required": ["events", "chapter_summary", "filler_ratio", "filler_type"],
   "properties": {
     "events": {
       "type": "array",
@@ -14,7 +14,7 @@
           "event_id": { "type": "string" },
           "event_type": {
             "type": "string",
-            "enum": ["conflict", "turning_point", "relationship_change", "status_change", "foreshadowing", "payoff"]
+            "enum": ["冲突", "转折", "关系变化", "身份变化", "伏笔", "伏笔回收"]
           },
           "title": { "type": "string" },
           "description": { "type": "string" },
@@ -26,12 +26,29 @@
           "involves_faction_change": { "type": "boolean" },
           "involves_death_or_breakthrough": { "type": "boolean" },
           "involves_relationship_change": { "type": "boolean" },
-          "importance": { "type": "integer", "minimum": 1, "maximum": 5 }
+          "importance": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "anchor_text": { "type": "string", "description": "原文中事件发生位置的引用片段（10-30字），用于阅读器高亮定位" },
+          "time_marker": {
+            "type": "string",
+            "description": "故事内时间节点标记（如'三天后'、'大战当夜'），无则空串",
+            "default": ""
+          }
         },
         "additionalProperties": false
       }
     },
-    "chapter_summary": { "type": "string" }
+    "chapter_summary": { "type": "string" },
+    "filler_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "本章注水比例估计（0.0-1.0）"
+    },
+    "filler_type": {
+      "type": "string",
+      "enum": ["none", "padding", "recap", "worldbuilding", "transition"],
+      "description": "注水类型"
+    }
   },
   "additionalProperties": false
 }

@@ -1,185 +1,232 @@
-# Web Novel Extraction Pipeline
+# 📖 StoryLens — Web Novel Intelligence Pipeline
 
-Extract structured story data from Chinese web novels. Python 3.10+, sole external dependency is the `openai` SDK.
+<p align="center">
+  <b>English</b> | <a href="./README.zh-CN.md">中文</a>
+</p>
 
-Supports OpenAI-compatible and Anthropic-compatible API endpoints. Includes a React/TypeScript GUI frontend and a built-in API server.
+> Automatically extract structured story data from Chinese web novels: chapter summaries, key events, character relationships, narrative arcs — all in one click.
 
-## How It Works
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
+![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-The pipeline runs in `standard_analysis` mode:
+---
 
-1. Genre classification (LLM)
-2. Chapter splitting (rule-based)
-3. Per-chapter key event extraction (LLM)
-4. Rule-based importance scoring (weighted event importance + boolean bonuses)
+## 🎯 What is this?
 
-Output per chapter: `chapter_summary`, `key_events[]`, `importance_score` (1-5), `importance_reason`.
+**StoryLens** is an AI-powered analysis tool for Chinese web novels.
 
-## Crawl Mode
+Chinese web novels often span hundreds or even thousands of chapters, making it hard for readers to grasp the full picture. StoryLens uses Large Language Models (LLMs) to **automatically analyze novels** — from genre identification and chapter segmentation to key event extraction, character tracking, and narrative arc generation — helping you understand the core content of a book in minutes.
 
-Fetch web novels directly from index pages. Supports chapter range selection, encoding override, and JSON export.
+Whether you are:
+- 📖 **A reader** — Want to quickly evaluate if a novel is worth following, or recap forgotten plotlines
+- 🎬 **A content adapter** — Need to map out story structure and character relationships for animation/comics/film adaptation
+- 📊 **A researcher** — Want to analyze narrative patterns and character networks in web fiction
+- 🛠️ **A developer** — Want to build on top of structured novel data
 
-## Cache System
+StoryLens has you covered.
 
-- Book-level cache at `data/cache/books/<book_hash>/`
-- Cache key: `{book_fingerprint}:{model}:v{pipeline_version}`
-- Same book + same model = cache hit across runs
-- Prompt/schema/version changes auto-invalidate
+## 💡 Why StoryLens?
 
-## Project Structure
+| Advantage | Description |
+|-----------|-------------|
+| **One-Click Launch** | Double-click `start.bat` and you're ready — no complex setup |
+| **Full Visual Pipeline** | Modern Web GUI: library → analysis → reader → search, all in your browser |
+| **Minimal Dependencies** | Backend needs only `openai` + `requests`, no heavy frameworks |
+| **Model Freedom** | Works with OpenAI / DeepSeek / Anthropic or any OpenAI-compatible API — use whatever fits your budget |
+| **Smart Caching** | Same chapter never hits the LLM twice — saves money and time |
+| **Incremental Analysis** | Novel updated? Only analyze new chapters, auto-merge with existing results |
+| **Story Memory** | Cross-chapter tracking of characters, relationships, and plot threads for more coherent analysis |
+| **Fully Local** | All data stored locally, nothing uploaded to third parties (except LLM API calls) |
+
+## 📸 Screenshots
+
+| Library | Reader (Original + Analysis) |
+|:---:|:---:|
+| ![Library](image/1.png) | ![Reader](image/2.png) |
+
+| Dashboard | Narrative Analysis |
+|:---:|:---:|
+| ![Dashboard](image/3.png) | ![Narrative](image/4.png) |
+
+| Characters | Timeline |
+|:---:|:---:|
+| ![Characters](image/5.png) | ![Timeline](image/6.png) |
+
+| Task Center (Crawl + Analysis) |
+|:---:|
+| ![Tasks](image/7.png) |
+
+## ✨ Features
+
+- **📝 Standard Analysis** — Genre classification → Chapter splitting → Key event extraction → Importance scoring, fully automated
+- **📊 Narrative Analysis** — Two-layer narrative analysis: group summaries + book-level synthesis for complete story arc mapping
+- **🧠 Story Memory** — Cross-chapter character/relationship/plot state tracking with alias normalization
+- **🕷️ Web Crawling** — Fetch novels directly from index pages with chapter range selection and encoding support
+- **📚 Bookshelf** — Multi-book management with independent analysis, supports incremental analysis (continue from previous runs)
+- **🖥️ Web GUI** — Modern React frontend with bookshelf, reader, character profiles, timeline, and more
+- **⚡ Smart Caching** — Cache keyed by book fingerprint + model + pipeline version, avoids redundant LLM calls
+- **🔌 Multi-LLM Support** — Compatible with OpenAI / Anthropic / DeepSeek and any OpenAI-compatible API
+- **🛑 Graceful Stop** — Stop analysis anytime; completed chapter results are preserved
+- **🔄 Dual-Provider Failover** — Configure primary + secondary LLM providers with automatic failover
+
+## 🏗️ Architecture
 
 ```
-src/
-  main.py               CLI entry point
-  api_server.py          HTTP API server (stdlib ThreadingHTTPServer)
-  standard_analysis.py   Standard analysis orchestrator
-  stages.py              LLM stage clients (OpenAI / Anthropic / MultiProvider)
-  models.py              Dataclasses for pipeline data
-  rule_scoring.py        Rule-based importance scoring
-  narrative_analyzer.py  Narrative analysis module
-  narrative_types.py     Narrative analysis types
-  chaptering.py          Chapter splitting from raw text
-  config.py              Paths, ModelConfig
-  runtime.py             RunPaths, StageCache, RunLogger
-  schema_validator.py    JSON Schema validation
-  prompt_loader.py       Template loading + rendering
-  stats.py               Token usage and cost tracking
-  web_crawler.py         Web novel crawling
-  book_index.py          Book index management
-gui/                     React frontend (TypeScript, Vite)
-prompts/                 LLM prompt templates (5 templates)
-schemas/                 JSON Schema definitions (6 schemas)
-data/                    Runtime data (gitignored)
+┌─────────────────────────────────────────────────────────────┐
+│                    React GUI (Vite + TS)                     │
+│  Library │ Tasks │ Dashboard │ Reader │ Characters │ Search  │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTP API
+┌────────────────────────▼────────────────────────────────────┐
+│             Python API Server (stdlib HTTP)                  │
+│  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌───────────────┐ │
+│  │ Book Mgmt│ │ Pipeline  │ │ Crawler  │ │ Static Files  │ │
+│  └──────────┘ └─────┬─────┘ └──────────┘ └───────────────┘ │
+│                     │                                       │
+│  ┌──────────────────▼──────────────────────────────────────┐│
+│  │           standard_analysis pipeline                     ││
+│  │  Genre → Chapter Split → Parallel Extraction → Scoring  ││
+│  │                    ↓                                     ││
+│  │           narrative_analyzer                             ││
+│  │  Group Summaries → Book-level Synthesis                  ││
+│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────────┐ │
+│  │LLM Client│ │  Cache   │ │  Memory  │ │ Schema Validator│ │
+│  └─────────┘ └──────────┘ └──────────┘ └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Usage
+## 🚀 Quick Start
 
-### Setup
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+ (only needed for frontend development)
+- An OpenAI-compatible API key
+
+### Installation
 
 ```bash
+git clone https://github.com/Mengv0320/StoryLens.git
+cd StoryLens
+
+# Python dependencies
+pip install -r requirements.txt
+
+# Configure environment
 cp .env.example .env
-# Fill in OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL
+# Edit .env and fill in your API key
 ```
 
-### CLI -- Standard Analysis
+### One-Click Launch
+
+```bash
+# Windows
+start.bat
+
+# Linux/macOS
+bash start.sh
+```
+
+Visit `http://localhost:8765` to use the full GUI.
+
+### Development Mode
+
+```bash
+# Backend
+python -m src.api_server
+
+# Frontend (separate terminal)
+cd gui && npm install && npm run dev
+```
+
+Frontend dev server runs at `http://localhost:5173` with API requests proxied to the backend.
+
+> **Note:** Set `NO_PROXY="*"` before starting the API server if you have a system proxy, to avoid ProxyError/SSLEOFError.
+
+## 📖 Usage
+
+### CLI — Standard Analysis
 
 ```bash
 python -m src.main input.txt --output result.json
-python -m src.main input.txt --output result.json --model gpt-4o --use-cache
+python -m src.main input.txt --output result.json --model deepseek-chat --use-cache
 ```
 
-### CLI -- Crawl
+### CLI — Web Crawling
 
 ```bash
+# Crawl and save as text
 python -m src.main --crawl-url https://example.com/novel/ --output novel.txt
+
+# Crawl chapters 1-50 only
 python -m src.main --crawl-url https://example.com/novel/ --chapter-start 1 --chapter-end 50
+
+# List available chapters
 python -m src.main --crawl-url https://example.com/novel/ --list-chapters
-python -m src.main --crawl-url https://example.com/novel/ --crawl-limit 100
-python -m src.main --crawl-url https://example.com/novel/ --crawl-json-output chapters.json
-python -m src.main --crawl-url https://example.com/novel/ --crawl-encoding gbk
 ```
 
-### GUI
+### GUI Pages
 
-```bash
-python -m src.api_server    # Backend on http://127.0.0.1:8765
-cd gui && npm run dev        # Frontend on http://localhost:5173
+| Page | Description |
+|------|-------------|
+| 📚 Library | Multi-book management, one-click analysis, delete/clean |
+| 📋 Tasks | Start/stop analysis pipeline, real-time progress |
+| 📊 Dashboard | Chapter stats, key characters, story stages |
+| 📖 Reader | Side-by-side original text and analysis comparison |
+| 👥 Characters | Character list, details, event participation |
+| 🕐 Timeline | Story event timeline visualization |
+| 📈 Narrative | Group summaries + book-level narrative synthesis |
+| 🔍 Search | Full-text search across chapters and events |
+| ⚙️ Settings | API configuration, model selection, parameter tuning |
+
+## ⚙️ Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | ✅ | LLM API key |
+| `OPENAI_MODEL` | | Model name (default: `gpt-4o`) |
+| `OPENAI_BASE_URL` | | API endpoint (supports proxies / self-hosted) |
+| `OPENAI_TYPE` | | Provider type: `openai` (default) or `anthropic` |
+| `OPENAI_API_KEY_2` | | Secondary provider API key |
+| `OPENAI_BASE_URL_2` | | Secondary provider endpoint |
+| `API_TOKEN` | | API access token (auth disabled if not set) |
+
+See [`.env.example`](./.env.example) for the full list.
+
+## 📂 Project Structure
+
+```
+src/
+  api_server.py          HTTP API server (stdlib ThreadingHTTPServer)
+  standard_analysis.py   Standard analysis pipeline orchestrator
+  narrative_analyzer.py  Two-layer narrative analysis
+  stages.py              LLM clients (OpenAI / Anthropic / MultiProvider)
+  story_memory.py        Cross-chapter story memory system
+  web_crawler.py         Web novel crawler
+  book_index.py          Book index management
+  rule_scoring.py        Rule-based importance scoring
+  chaptering.py          Chapter splitting from raw text
+  main.py                CLI entry point
+gui/
+  src/pages/             13 feature pages
+  src/components/        Reusable UI component library
+  src/lib/               API client, types, custom hooks
+prompts/                 LLM prompt templates (5 templates)
+schemas/                 JSON Schema definitions (5 schemas)
+data/                    Runtime data (gitignored)
 ```
 
-Note: set `NO_PROXY="*"` before starting the API server if you have a system proxy configured, to avoid ProxyError/SSLEOFError.
+## 🔧 Tech Stack
 
-## Environment Variables
+**Backend:** Python 3.10+ · stdlib `http.server` · OpenAI SDK · Multi-threaded parallelism
 
-| Variable | Description |
-|---|---|
-| `OPENAI_API_KEY` | Required. API key for the primary provider. |
-| `OPENAI_MODEL` | Model name. Default: `gpt-4.1-mini` (CLI) / `gpt-4o` (API server) |
-| `OPENAI_BASE_URL` | Base URL for OpenAI-compatible endpoints |
-| `OPENAI_TYPE` | `openai` (default) or `anthropic` |
-| `USE_ANTHROPIC` | Set to `1` or `true` to use Anthropic API (CLI only) |
-| `OPENAI_API_KEY_2` | Secondary provider API key (failover) |
-| `OPENAI_BASE_URL_2` | Secondary provider base URL |
-| `OPENAI_MODEL_2` | Secondary provider model |
-| `OPENAI_TYPE_2` | Secondary provider type: `openai` or `anthropic` |
-| `OPENAI_SANITIZE_2` | Set to `1` or `true` to enable sanitization for secondary provider |
+**Frontend:** React 19 · TypeScript 5.9 · Vite 8 · TailwindCSS 3 · Lucide Icons · React Router 7
 
-## CLI Flags
+**Minimal Dependencies:** Backend requires only `openai` and `requests`
 
-| Flag | Description |
-|---|---|
-| `input` | Path to a UTF-8 text file (positional) |
-| `--crawl-url URL` | Fetch a novel index page and save merged chapter text |
-| `--crawl-limit N` | Only fetch the first N chapters |
-| `--crawl-json-output PATH` | JSON output path for crawled chapters |
-| `--crawl-encoding ENC` | Fixed response encoding for crawl mode |
-| `--list-chapters` | Print chapter list then exit |
-| `--chapter-start N` | 1-based starting chapter number |
-| `--chapter-end N` | 1-based ending chapter number |
-| `--context-before-chapters N` | Prepend N earlier chapters as context |
-| `--output PATH` | JSON result path |
-| `--model MODEL` | Override model name |
-| `--base-url URL` | Override OpenAI-compatible base URL |
-| `--use-anthropic` | Use Anthropic API |
-| `--model-config JSON` | Per-stage model config JSON |
-| `--use-cache` | Enable LLM response caching |
-| `--no-cache` | Disable LLM response caching |
-| `--project NAME` | Project name for cache namespace |
-| `--max-workers N` | Max concurrent workers |
+## 📄 License
 
-## API Endpoints
-
-Base URL: `http://127.0.0.1:8765`
-
-### POST
-
-| Endpoint | Description |
-|---|---|
-| `/api/pipeline/start` | Start a pipeline run. Body: `{inputPath, mode, model, projectName, outputDir, useCache}` |
-
-### GET -- Pipeline
-
-| Endpoint | Description |
-|---|---|
-| `/api/health` | Health check |
-| `/api/pipeline/status` | Current pipeline run status |
-| `/api/runs` | List previous runs |
-
-### GET -- Results
-
-| Endpoint | Description |
-|---|---|
-| `/api/results/dashboard` | Dashboard summary (chapter counts, key stages, characters) |
-| `/api/results/standard-analysis` | Raw standard analysis JSON |
-| `/api/results/chapter-analysis` | Chapter analysis data |
-| `/api/results/characters` | Character list with event counts |
-| `/api/results/characters/{name}` | Character detail (events, related chapters) |
-| `/api/results/timeline` | Timeline of story events |
-| `/api/results/failures` | Failed chapters/stages |
-| `/api/results/logs` | Pipeline execution logs |
-| `/api/results/settings` | Current run settings |
-| `/api/results/exports` | Export data |
-| `/api/results/narrative` | Narrative analysis data |
-| `/api/results/narrative/groups` | Narrative group summaries |
-| `/api/results/narrative/synthesis` | Book-level narrative synthesis |
-
-### GET -- Scan (synthesized from standard analysis)
-
-| Endpoint | Description |
-|---|---|
-| `/api/scan/overview` | Book overview (plotline, key stages, core characters) |
-| `/api/scan/segments` | Chapter segments with summaries |
-| `/api/scan/segments/{id}` | Single segment detail |
-| `/api/scan/key-chapters` | High-importance chapters |
-| `/api/scan/reading-guide` | Generated reading guide |
-| `/api/scan/chapter-index` | Full chapter index with scores |
-| `/api/scan/stats` | Analysis statistics |
-
-### GET -- Books
-
-| Endpoint | Description |
-|---|---|
-| `/api/books` | List all indexed books |
-| `/api/books/{id}` | Book metadata |
-| `/api/books/{id}/chapters` | Chapter list for a book |
-| `/api/books/{id}/chapters/{chapterId}` | Single chapter detail |
-| `/api/books/{id}/analysis/latest` | Latest analysis result for a book |
+[MIT](./LICENSE)

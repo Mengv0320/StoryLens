@@ -46,7 +46,7 @@ export default function DashboardPage() {
 
   if (!status || (pipelineStatus === "idle" && !dash)) {
     return (
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-5">
         <h1 className="text-2xl font-semibold text-txt">仪表盘</h1>
         <EmptyState message="尚未运行任何任务。前往「书架」选择书籍，或前往「任务」页面开始处理。" />
       </div>
@@ -55,7 +55,7 @@ export default function DashboardPage() {
 
   if (!dash && dashLoading) {
     return (
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-5">
         <h1 className="text-2xl font-semibold text-txt">仪表盘</h1>
         <EmptyState message="正在加载数据..." />
       </div>
@@ -64,7 +64,7 @@ export default function DashboardPage() {
 
   if (!dash) {
     return (
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-5">
         <h1 className="text-2xl font-semibold text-txt">仪表盘</h1>
         <EmptyState message="暂无数据。" />
       </div>
@@ -80,7 +80,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">仪表盘</h1>
 
       <SectionHeader

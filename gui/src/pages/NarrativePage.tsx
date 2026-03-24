@@ -135,7 +135,7 @@ export default function NarrativePage() {
 
   if (loading && !data) {
     return (
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-5">
         <h1 className="text-2xl font-semibold text-txt">叙事分析</h1>
         <EmptyState message="正在加载..." />
       </div>
@@ -144,7 +144,7 @@ export default function NarrativePage() {
 
   if (!data) {
     return (
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-5">
         <h1 className="text-2xl font-semibold text-txt">叙事分析</h1>
         <EmptyState message="暂无叙事分析数据，请先完成标准分析。" />
       </div>
@@ -155,7 +155,7 @@ export default function NarrativePage() {
   const groups = data.groupSummaries ?? [];
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">叙事分析</h1>
 
       {/* Book Synthesis */}

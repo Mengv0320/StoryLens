@@ -102,6 +102,7 @@ export type StandardChapterKeyEvent = {
   involvesDeathOrBreakthrough: boolean;
   involvesRelationshipChange: boolean;
   importance: number;
+  anchorText?: string;
   anchorOffset?: number;
 };
 
@@ -267,6 +268,25 @@ export type BookSynthesis = {
 export type NarrativeResult = {
   groupSummaries: GroupSummary[];
   bookSynthesis: BookSynthesis | null;
+};
+
+// --- Segments / Reading Guide ---
+export type Segment = {
+  segmentId: string;
+  chapterRange: string;
+  summary: string;
+  mainPlot: string;
+  keyCharacters: string[];
+  mustReadChapters: string[];
+  estimatedPriority: string;
+};
+
+export type ReadingGuide = {
+  mustReadChapters: string[];
+  skippableRanges: string[];
+  readingOrderSuggestion: string;
+  estimatedEssentialRatio: number;
+  summaryByStage: string[];
 };
 
 // --- Book API ---

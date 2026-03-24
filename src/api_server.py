@@ -74,7 +74,7 @@ def _validate_path_within(path_val: str, base: Path, label: str) -> Path:
         raise ValueError(f"{label} must be within {base_resolved}")
     return resolved
 
-from .config import Paths, DEFAULT_MODEL
+from .config import Paths, ModelConfig, DEFAULT_MODEL
 from .serialization import camelize as _camelize
 from .runtime import RunLogger, RunPaths, StageCache, compute_book_fingerprint, save_json, save_jsonl
 from .stages import OpenAILLMClient, AnthropicLLMClient, MultiProviderClient
@@ -151,6 +151,8 @@ class RunManager:
         self._run_paths: RunPaths | None = None
         self._artifact_cache: dict[str, Any] = {}
         self._artifact_cache_mtime: dict[str, float] = {}
+        self._stop_event = threading.Event()
+        self._pipeline_thread: threading.Thread | None = None
         self._restore_last_run()
 
     def _restore_last_run(self) -> None:
@@ -314,7 +316,9 @@ class RunManager:
             self._run_paths = RunPaths.from_output(Path(output_dir))
             self._run_paths.ensure()
         logger.info("Pipeline start: run_id=%s mode=%s model=%s project=%s", run_id, mode, model, project_name)
+        self._stop_event.clear()
         t = threading.Thread(target=self._run_pipeline, daemon=True)
+        self._pipeline_thread = t
         t.start()
         return {"runId": run_id, "status": "running", "outputDir": output_dir}
 
@@ -352,6 +356,22 @@ class RunManager:
     def state(self) -> RunState:
         with self._lock:
             return copy.copy(self._state)
+
+    def stop(self) -> dict[str, Any]:
+        """Request the running pipeline to stop gracefully."""
+        with self._lock:
+            if self._state.status != "running":
+                return {"error": "No pipeline is currently running"}
+            self._stop_event.set()
+            self._state.status = "failed"
+            self._state.error = "用户手动停止"
+            self._state.updated_at = _utc_now()
+        logger.info("Pipeline stop requested by user")
+        return {"ok": True, "message": "Pipeline stop requested"}
+
+    @property
+    def stop_requested(self) -> bool:
+        return self._stop_event.is_set()
 
     # -- pipeline thread --
 
@@ -410,12 +430,76 @@ class RunManager:
             else:
                 client = primary
 
+            # Build per-stage model config from environment
+            model_config = ModelConfig(
+                genre_model=os.environ.get("GENRE_MODEL") or None,
+                extraction_model=os.environ.get("EXTRACT_MODEL") or None,
+                analysis_model=os.environ.get("ANALYSIS_MODEL") or None,
+                summary_model=os.environ.get("SUMMARY_MODEL") or None,
+            )
+
             from .standard_analysis import run_standard_analysis
+            from .story_memory import StoryMemory
             book_fp = compute_book_fingerprint(text)
             base_cache = Path(st.output_dir).parent.parent / "cache"
             cache = StageCache.for_book(base_cache, book_fp, st.model) if st.use_cache else None
             run_log = RunLogger(rp.logs_dir / "run.jsonl")
             sa_stats = PipelineStats()
+
+            # --- Load prior story memory (cross-run inheritance) ---
+            prior_memory: StoryMemory | None = None
+            enable_story_memory = True
+            try:
+                runs_base = Path(st.output_dir).parent
+                if runs_base.is_dir():
+                    mem_runs = sorted(
+                        [d for d in runs_base.iterdir()
+                         if d.is_dir()
+                         and str(d.resolve()) != str(Path(st.output_dir).resolve())],
+                        key=lambda d: d.stat().st_mtime,
+                        reverse=True,
+                    )
+                    for prev_run in mem_runs:
+                        mem_path = prev_run / "knowledge" / "story_memory.json"
+                        if mem_path.exists():
+                            prior_memory = StoryMemory.load(mem_path)
+                            if prior_memory.total_chapters_processed > 0:
+                                logger.info("Loaded prior story memory from %s (%d chapters, %d characters)",
+                                            prev_run.name, prior_memory.total_chapters_processed,
+                                            len(prior_memory.characters))
+                                break
+                            else:
+                                prior_memory = None
+            except Exception as exc:
+                logger.debug("Failed to load prior story memory (non-fatal): %s", exc)
+                prior_memory = None
+
+            # --- Load prior chapters for incremental merge ---
+            prior_chapters: list[dict] = []
+            prior_genre: dict = {}
+            try:
+                runs_base = Path(st.output_dir).parent
+                if runs_base.is_dir():
+                    existing_runs = sorted(
+                        [d for d in runs_base.iterdir()
+                         if d.is_dir() and d.name.startswith(sanitize_name(st.project_name) + "_")
+                         and str(d.resolve()) != str(Path(st.output_dir).resolve())],
+                        key=lambda d: d.stat().st_mtime,
+                        reverse=True,
+                    )
+                    for prev_run in existing_runs:
+                        prev_output = prev_run / "standard_output.json"
+                        if prev_output.exists():
+                            prev_data = json.loads(prev_output.read_text(encoding="utf-8"))
+                            prev_chs = prev_data.get("chapters", [])
+                            if prev_chs:
+                                prior_chapters = [ch for ch in prev_chs if ch.get("status") == "ok"]
+                                prior_genre = prev_data.get("genre", {})
+                                logger.info("Found %d prior chapters from %s", len(prior_chapters), prev_run.name)
+                            break
+            except Exception:
+                logger.debug("Failed to load prior chapters (non-fatal)", exc_info=True)
+
             result = run_standard_analysis(
                 text=text,
                 client=client,
@@ -423,9 +507,34 @@ class RunManager:
                 logger=run_log,
                 artifacts_dir=Path(st.output_dir) / "artifacts",
                 stats=sa_stats,
-                refinement_intensity=st.refinement_intensity
+                refinement_intensity=st.refinement_intensity,
+                enable_story_memory=enable_story_memory,
+                initial_memory=prior_memory,
+                stop_event=self._stop_event,
+                model_config=model_config,
             )
+
+            # --- Merge with prior chapters (incremental analysis) ---
+            # Use title (e.g. "第47章 ...") for dedup, NOT chapter_id (always sequential from 001)
+            if prior_chapters:
+                new_titles = {ch.get("title", "").strip() for ch in result.get("chapters", [])}
+                kept_prior = [ch for ch in prior_chapters if ch.get("title", "").strip() not in new_titles]
+                if kept_prior:
+                    merged = kept_prior + result.get("chapters", [])
+                    # Re-number chapter_ids sequentially after merge
+                    for i, ch in enumerate(merged, 1):
+                        ch["chapter_id"] = f"chapter_{i:03d}"
+                    result["chapters"] = merged
+                    logger.info("Merged %d prior chapters + %d new chapters (by title dedup)", len(kept_prior), len(result["chapters"]) - len(kept_prior))
+                if result.get("genre", {}).get("primary_genre") == "unknown" and prior_genre:
+                    result["genre"] = prior_genre
+
             save_json(result, Path(st.output_dir) / "standard_output.json")
+
+            # Check if user requested stop before narrative analysis
+            if self._stop_event.is_set():
+                logger.info("Pipeline stopped by user after standard analysis")
+                return
 
             # --- Narrative analysis (Layer 1 + Layer 2) ---
             try:
@@ -617,10 +726,12 @@ def _read_logs(mgr: RunManager, limit: int = 200) -> list[dict[str, Any]]:
 def _read_settings(mgr: RunManager) -> dict[str, Any]:
     api_key = os.environ.get("OPENAI_API_KEY", "")
     st = mgr.state
+    # Mask API key: only expose first 6 + last 4 chars
+    masked_key = (api_key[:6] + "****" + api_key[-4:]) if len(api_key) > 10 else ("****" if api_key else "")
     return {
         "apiKeySet": bool(api_key),
         "apiKeyStatus": "已配置" if api_key else "未配置",
-        "apiKey": api_key,
+        "apiKey": masked_key,
         "model": os.environ.get("OPENAI_MODEL") or st.model or DEFAULT_MODEL,
         "baseUrl": os.environ.get("OPENAI_BASE_URL", ""),
         "apiType": os.environ.get("OPENAI_TYPE", "openai"),
@@ -631,6 +742,10 @@ def _read_settings(mgr: RunManager) -> dict[str, Any]:
         "outputDir": st.output_dir or "./output",
         "lastRunId": st.run_id or "—",
         "lastRunStatus": st.status,
+        "genreModel": os.environ.get("GENRE_MODEL", ""),
+        "extractModel": os.environ.get("EXTRACT_MODEL", ""),
+        "analysisModel": os.environ.get("ANALYSIS_MODEL", ""),
+        "summaryModel": os.environ.get("SUMMARY_MODEL", ""),
     }
 
 
@@ -638,6 +753,7 @@ _ENV_ALLOWED_KEYS = {
     "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_TYPE",
     "OPENAI_API_KEY_2", "OPENAI_BASE_URL_2", "OPENAI_MODEL_2", "OPENAI_TYPE_2",
     "OPENAI_SANITIZE_2", "API_TOKEN", "CORS_ORIGINS",
+    "GENRE_MODEL", "EXTRACT_MODEL", "ANALYSIS_MODEL", "SUMMARY_MODEL",
 }
 
 
@@ -662,6 +778,10 @@ def _update_settings(payload: dict[str, Any]) -> dict[str, Any]:
         "baseUrl": "OPENAI_BASE_URL",
         "model": "OPENAI_MODEL",
         "apiType": "OPENAI_TYPE",
+        "genreModel": "GENRE_MODEL",
+        "extractModel": "EXTRACT_MODEL",
+        "analysisModel": "ANALYSIS_MODEL",
+        "summaryModel": "SUMMARY_MODEL",
     }
 
     updated_keys: list[str] = []
@@ -995,6 +1115,29 @@ class ApiHandler(BaseHTTPRequestHandler):
         if path == "/api/results/exports":
             self._send_json(_read_exports_standard(mgr))
             return
+        # Download export file by id
+        export_dl_match = re.match(r"^/api/results/exports/([^/]+)/download$", path)
+        if export_dl_match:
+            file_id = unquote(export_dl_match.group(1))
+            exports = _read_exports_standard(mgr)
+            target = next((e for e in exports if e["id"] == file_id), None)
+            if not target or not target.get("exists"):
+                self._send_json({"error": "File not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            file_path = Path(target["path"])
+            try:
+                content = file_path.read_bytes()
+                filename = file_path.name
+                self.send_response(HTTPStatus.OK)
+                self._send_cors_headers()
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            except OSError as exc:
+                self._send_json({"error": f"Failed to read file: {exc}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
         if path == "/api/results/failures":
             self._send_json(_read_failures(mgr))
             return
@@ -1100,7 +1243,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         if path == "/api/results/chapter-analysis":
             data = _read_standard_analysis(mgr)
             if data:
-                self._send_json(data)
+                self._send_json(_camelize(data))
             else:
                 self._send_json({"error": "No data"}, status=HTTPStatus.NOT_FOUND)
             return
@@ -1142,32 +1285,46 @@ class ApiHandler(BaseHTTPRequestHandler):
         if book_wiki_match:
             book_id = unquote(book_wiki_match.group(1))
             chapter_id = unquote(book_wiki_match.group(2))
-            
-            chapters = _book_index.get_chapters(book_id)
-            if not chapters:
+
+            # Read standard_output once, iterate chapters in-memory (avoid O(N²))
+            run_dir = _book_index.get_latest_run_dir(book_id)
+            if not run_dir:
+                self._send_json({"error": "No data for this book"}, status=HTTPStatus.NOT_FOUND)
+                return
+            std_path = run_dir / "standard_output.json"
+            if not std_path.exists():
                 self._send_json({"error": "No chapters"}, status=HTTPStatus.NOT_FOUND)
                 return
-                
+            try:
+                all_data = json.loads(std_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                self._send_json({"error": "Failed to read data"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            all_chapters = all_data.get("chapters", [])
+            if not all_chapters:
+                self._send_json({"error": "No chapters"}, status=HTTPStatus.NOT_FOUND)
+                return
+
             timeline = []
             characters = set()
-            
-            for ch in chapters:
-                cid = ch["chapterId"]
-                detail = _book_index.get_chapter_detail(book_id, cid)
-                if detail and detail.get("status") == "ok":
-                    for ev in detail.get("keyEvents", []):
+
+            for ch in all_chapters:
+                cid = ch.get("chapter_id", "")
+                if ch.get("status") == "ok":
+                    for ev in ch.get("key_events", []):
                         timeline.append({
                             "chapterId": cid,
-                            "chapterTitle": ch["title"],
+                            "chapterTitle": ch.get("title", ""),
                             "description": ev.get("description", ""),
                             "characters": ev.get("characters", [])
                         })
                         for c in ev.get("characters", []):
                             characters.add(c)
-                
+
                 if cid == chapter_id:
                     break
-                    
+
             self._send_json({
                 "characters": sorted(list(characters)),
                 "timeline": timeline
@@ -1240,11 +1397,56 @@ class ApiHandler(BaseHTTPRequestHandler):
             if not found:
                 self._send_json({"error": "Character not found"}, status=HTTPStatus.NOT_FOUND)
                 return
+
+            # 从 story_memory 读取角色档案和关系
+            aliases: list[str] = []
+            identity = ""
+            faction = ""
+            description = ""
+            rels_from_memory: list[dict] = []
+
+            run_dir = _book_index.get_latest_run_dir(book_id)
+            if run_dir:
+                mem_path = Path(run_dir) / "knowledge" / "story_memory.json"
+                if mem_path.exists():
+                    try:
+                        from .story_memory import StoryMemory
+                        memory = StoryMemory.load(mem_path)
+                        for cp in memory.characters:
+                            if cp.name == char_id:
+                                aliases = cp.aliases
+                                identity = cp.role
+                                faction = cp.faction
+                                description = cp.summary
+                                break
+                        for rel in memory.relationships:
+                            if rel.character_a == char_id:
+                                rels_from_memory.append({
+                                    "targetName": rel.character_b,
+                                    "relationType": rel.relation_type,
+                                    "note": rel.description,
+                                })
+                            elif rel.character_b == char_id:
+                                rels_from_memory.append({
+                                    "targetName": rel.character_a,
+                                    "relationType": rel.relation_type,
+                                    "note": rel.description,
+                                })
+                    except Exception:
+                        pass
+
+            # 合并关系：memory 优先，补充 co-occurrence 中未覆盖的
+            memory_rel_names = {r["targetName"] for r in rels_from_memory}
+            for r_name in list(related)[:10]:
+                if r_name not in memory_rel_names:
+                    rels_from_memory.append({"targetName": r_name, "relationType": "co-occurrence", "note": "同章出现"})
+
             self._send_json({
-                "id": char_id, "name": char_id, "aliases": [],
-                "identity": "", "faction": "", "currentGoal": "",
+                "id": char_id, "name": char_id, "aliases": aliases,
+                "identity": identity, "faction": faction, "currentGoal": "",
+                "description": description,
                 "recentEvents": events[-20:],
-                "relationships": [{"targetName": r, "relationType": "unknown", "note": ""} for r in list(related)[:10]],
+                "relationships": rels_from_memory[:15],
             })
             return
 
@@ -1272,6 +1474,84 @@ class ApiHandler(BaseHTTPRequestHandler):
                         "summary": ev.get("description", ""),
                     })
             self._send_json(items_tl)
+            return
+
+        book_segments_match = re.match(r"^/api/books/([^/]+)/segments$", path)
+        if book_segments_match:
+            book_id = unquote(book_segments_match.group(1))
+            data = _book_index.get_latest_analysis(book_id)
+            if not data:
+                self._send_json([])
+                return
+            all_chapters = data.get("chapters", [])
+            group_size = 10
+            segments_list = []
+            for i in range(0, len(all_chapters), group_size):
+                group = all_chapters[i:i + group_size]
+                first_title = group[0].get("title", "") if group else ""
+                last_title = group[-1].get("title", "") if group else ""
+                chars_set: set[str] = set()
+                summaries: list[str] = []
+                important_summaries: list[str] = []
+                must_read: list[str] = []
+                max_imp = 0
+                for ch in group:
+                    imp = ch.get("importanceScore", ch.get("importance_score", 0))
+                    if imp > max_imp:
+                        max_imp = imp
+                    ch_sum = ch.get("chapterSummary", ch.get("chapter_summary", ""))
+                    if ch_sum:
+                        summaries.append(ch_sum)
+                    if imp >= 3 and ch_sum:
+                        important_summaries.append(ch_sum)
+                    if imp >= 4:
+                        must_read.append(ch.get("title", ""))
+                    for ev in ch.get("keyEvents", ch.get("key_events", [])):
+                        for c in ev.get("characters", []):
+                            chars_set.add(c)
+                priority = "high" if max_imp >= 4 else ("medium" if max_imp >= 3 else "low")
+                segments_list.append({
+                    "segmentId": f"seg_{(i // group_size) + 1:03d}",
+                    "chapterRange": f"{first_title} ~ {last_title}" if first_title != last_title else first_title,
+                    "estimatedPriority": priority,
+                    "summary": " ".join(summaries[:3]),
+                    "mainPlot": " ".join(important_summaries[:2]),
+                    "keyCharacters": list(chars_set)[:8],
+                    "mustReadChapters": must_read,
+                })
+            self._send_json(segments_list)
+            return
+
+        book_reading_guide_match = re.match(r"^/api/books/([^/]+)/reading-guide$", path)
+        if book_reading_guide_match:
+            book_id = unquote(book_reading_guide_match.group(1))
+            data = _book_index.get_latest_analysis(book_id)
+            if not data:
+                self._send_json({})
+                return
+            all_chapters = data.get("chapters", [])
+            total = len(all_chapters)
+            must_read = [ch.get("title", "") for ch in all_chapters if ch.get("importanceScore", ch.get("importance_score", 0)) >= 4]
+            skippable = [ch.get("title", "") for ch in all_chapters if ch.get("importanceScore", ch.get("importance_score", 0)) <= 2]
+            summary_by_stage: list[str] = []
+            group_size = 10
+            for i in range(0, total, group_size):
+                group = all_chapters[i:i + group_size]
+                first = group[0].get("title", "") if group else ""
+                last = group[-1].get("title", "") if group else ""
+                sums = [ch.get("chapterSummary", ch.get("chapter_summary", "")) for ch in group
+                        if ch.get("importanceScore", ch.get("importance_score", 0)) >= 3
+                        and ch.get("chapterSummary", ch.get("chapter_summary", ""))]
+                rng = f"{first} ~ {last}" if first != last else first
+                text = " ".join(sums[:2]) if sums else "无重要事件"
+                summary_by_stage.append(f"{rng}：{text}")
+            self._send_json({
+                "mustReadChapters": must_read,
+                "skippableRanges": skippable,
+                "readingOrderSuggestion": "按章节顺序阅读，重点关注重要性≥4的章节。",
+                "estimatedEssentialRatio": len(must_read) / total if total > 0 else 0,
+                "summaryByStage": summary_by_stage,
+            })
             return
 
         # -- Static file fallback (SPA) --
@@ -1338,20 +1618,29 @@ class ApiHandler(BaseHTTPRequestHandler):
         book_delete_match = re.match(r"^/api/books/([^/]+)$", path)
         if book_delete_match:
             book_id = unquote(book_delete_match.group(1))
-            run_dir = _book_index.get_latest_run_dir(book_id)
-            if not run_dir:
+            book_data = _book_index.get_book(book_id)
+            if not book_data:
                 self._send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
                 return
             import shutil
-            try:
-                _validate_path_within(str(run_dir), _paths.data_dir, "book delete path")
-                shutil.rmtree(run_dir)
-                _book_index._last_scan_mtime = 0.0  # Force re-scan
-                self._send_json({"ok": True, "deleted": book_id})
-            except ValueError as ve:
-                self._send_json({"error": str(ve)}, status=HTTPStatus.BAD_REQUEST)
-            except OSError as e:
-                self._send_json({"error": f"Failed to delete: {e}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            # Delete ALL run directories for this book (not just latest)
+            deleted_dirs = []
+            errors = []
+            for run in book_data.get("runs", []):
+                run_id = run.get("runId", "")
+                run_dir = _paths.runs_dir / run_id
+                if run_dir.is_dir():
+                    try:
+                        _validate_path_within(str(run_dir), _paths.data_dir, "book delete path")
+                        shutil.rmtree(run_dir)
+                        deleted_dirs.append(run_id)
+                    except (ValueError, OSError) as e:
+                        errors.append(f"{run_id}: {e}")
+            _book_index._last_scan_mtime = 0.0  # Force re-scan
+            if errors and not deleted_dirs:
+                self._send_json({"error": f"Failed to delete: {'; '.join(errors)}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            else:
+                self._send_json({"ok": True, "deleted": book_id, "deletedRuns": deleted_dirs})
             return
         
         self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
@@ -1366,6 +1655,13 @@ class ApiHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if path == "/api/pipeline/start":
                 result = mgr.start(payload)
+                if "error" in result:
+                    self._send_json(result, status=HTTPStatus.CONFLICT)
+                else:
+                    self._send_json(result)
+                return
+            if path == "/api/pipeline/stop":
+                result = mgr.stop()
                 if "error" in result:
                     self._send_json(result, status=HTTPStatus.CONFLICT)
                 else:
@@ -1815,7 +2111,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         })
 
     def _send_standard_characters(self, mgr: RunManager) -> list[dict]:
-        """Synthesize character list from standard_output key_events."""
+        """Synthesize character list from standard_output key_events + story_memory."""
         data = self._load_standard_result(mgr)
         if not data:
             self._send_json([])
@@ -1828,13 +2124,33 @@ class ApiHandler(BaseHTTPRequestHandler):
                 for c in ev.get("characters", []):
                     char_events[c] = char_events.get(c, 0) + 1
                     char_latest[c] = ch_title
+
+        # 从 story_memory 充实角色信息
+        memory_chars: dict[str, dict] = {}
+        if mgr.state.output_dir:
+            mem_path = Path(mgr.state.output_dir) / "knowledge" / "story_memory.json"
+            if mem_path.exists():
+                try:
+                    from .story_memory import StoryMemory
+                    memory = StoryMemory.load(mem_path)
+                    for cp in memory.characters:
+                        memory_chars[cp.name] = {
+                            "faction": cp.faction or None,
+                            "aliasCount": len(cp.aliases),
+                            "role": cp.role,
+                            "power_level": cp.power_level,
+                        }
+                except Exception:
+                    pass
+
         items = []
         for name, count in sorted(char_events.items(), key=lambda x: x[1], reverse=True):
+            mc = memory_chars.get(name, {})
             items.append({
                 "id": name,
                 "name": name,
-                "faction": None,
-                "aliasCount": 0,
+                "faction": mc.get("faction"),
+                "aliasCount": mc.get("aliasCount", 0),
                 "eventCount": count,
                 "latestChapterLabel": char_latest.get(name, ""),
             })
@@ -1842,7 +2158,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         return items
 
     def _send_standard_character_detail(self, mgr: RunManager, char_id: str) -> None:
-        """Synthesize character detail from standard_output key_events."""
+        """Synthesize character detail from standard_output key_events + story_memory."""
         data = self._load_standard_result(mgr)
         if not data:
             self._send_json({"error": "Character not found"}, status=HTTPStatus.NOT_FOUND)
@@ -1862,16 +2178,61 @@ class ApiHandler(BaseHTTPRequestHandler):
         if not found:
             self._send_json({"error": "Character not found"}, status=HTTPStatus.NOT_FOUND)
             return
-        rels = [{"targetName": r, "relationType": "unknown", "note": ""} for r in list(related)[:10]]
+
+        # 从 story_memory 读取角色档案和关系
+        aliases: list[str] = []
+        identity = ""
+        faction = ""
+        current_goal = ""
+        description = ""
+        rels_from_memory: list[dict] = []
+
+        if mgr.state.output_dir:
+            mem_path = Path(mgr.state.output_dir) / "knowledge" / "story_memory.json"
+            if mem_path.exists():
+                try:
+                    from .story_memory import StoryMemory
+                    memory = StoryMemory.load(mem_path)
+                    for cp in memory.characters:
+                        if cp.name == char_id:
+                            aliases = cp.aliases
+                            identity = cp.role
+                            faction = cp.faction
+                            description = cp.summary
+                            break
+
+                    for rel in memory.relationships:
+                        if rel.character_a == char_id:
+                            rels_from_memory.append({
+                                "targetName": rel.character_b,
+                                "relationType": rel.relation_type,
+                                "note": rel.description,
+                            })
+                        elif rel.character_b == char_id:
+                            rels_from_memory.append({
+                                "targetName": rel.character_a,
+                                "relationType": rel.relation_type,
+                                "note": rel.description,
+                            })
+                except Exception:
+                    pass
+
+        # 合并关系：memory 优先，补充 co-occurrence 中未覆盖的
+        memory_rel_names = {r["targetName"] for r in rels_from_memory}
+        for r_name in list(related)[:10]:
+            if r_name not in memory_rel_names:
+                rels_from_memory.append({"targetName": r_name, "relationType": "co-occurrence", "note": "同章出现"})
+
         self._send_json({
             "id": char_id,
             "name": char_id,
-            "aliases": [],
-            "identity": "",
-            "faction": "",
-            "currentGoal": "",
+            "aliases": aliases,
+            "identity": identity,
+            "faction": faction,
+            "currentGoal": current_goal,
+            "description": description,
             "recentEvents": events[-20:],
-            "relationships": rels,
+            "relationships": rels_from_memory[:15],
         })
 
     def _send_standard_timeline(self, mgr: RunManager) -> None:

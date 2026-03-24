@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { usePolling } from "../lib/usePolling";
 import { Card, SectionHeader, KeyValue, Badge } from "../components/primitives";
-import { Save, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { Save, Eye, EyeOff, RotateCcw, ChevronDown } from "lucide-react";
 
 type ApiType = "openai" | "anthropic";
 
@@ -19,6 +19,11 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [genreModel, setGenreModel] = useState("");
+  const [extractModel, setExtractModel] = useState("");
+  const [analysisModel, setAnalysisModel] = useState("");
+  const [summaryModel, setSummaryModel] = useState("");
 
   // Load settings into form once
   useEffect(() => {
@@ -27,6 +32,10 @@ export default function SettingsPage() {
       setBaseUrl(String(settings.baseUrl ?? ""));
       setModel(String(settings.model ?? ""));
       setApiType((settings.apiType as ApiType) ?? "openai");
+      setGenreModel(String(settings.genreModel ?? ""));
+      setExtractModel(String(settings.extractModel ?? ""));
+      setAnalysisModel(String(settings.analysisModel ?? ""));
+      setSummaryModel(String(settings.summaryModel ?? ""));
       setLoaded(true);
     }
   }, [settings, loaded]);
@@ -35,7 +44,16 @@ export default function SettingsPage() {
     setSaving(true);
     setMsg(null);
     try {
-      await api.updateSettings({ apiKey, baseUrl, model, apiType });
+      // Don't send masked key back — only send if user edited it
+      const payload: Record<string, string> = { baseUrl, model, apiType };
+      if (apiKey && !apiKey.includes("****")) {
+        payload.apiKey = apiKey;
+      }
+      if (genreModel) payload.genreModel = genreModel;
+      if (extractModel) payload.extractModel = extractModel;
+      if (analysisModel) payload.analysisModel = analysisModel;
+      if (summaryModel) payload.summaryModel = summaryModel;
+      await api.updateSettings(payload);
       setMsg({ type: "ok", text: "配置已保存，下次运行管线时生效" });
     } catch (e: any) {
       setMsg({ type: "err", text: e.message || "保存失败" });
@@ -48,9 +66,6 @@ export default function SettingsPage() {
     setLoaded(false);
   };
 
-  const maskedKey = apiKey
-    ? apiKey.slice(0, 6) + "****" + apiKey.slice(-4)
-    : "未配置";
 
   const chaptersPerEpisode = settings?.chaptersPerEpisode ?? 10;
   const splitStrategy = settings?.splitStrategy ?? "dynamic";
@@ -61,7 +76,7 @@ export default function SettingsPage() {
   const lastRunStatus = settings?.lastRunStatus ?? "—";
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">设置</h1>
 
       {/* API Configuration Card */}
@@ -110,7 +125,7 @@ export default function SettingsPage() {
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://api.siliconflow.cn/v1"
-              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
+              className="w-full rounded-md border border-border bg-panel px-3 py-2 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
           </div>
 
@@ -122,7 +137,7 @@ export default function SettingsPage() {
               value={model}
               onChange={(e) => setModel(e.target.value)}
               placeholder="Pro/zai-org/GLM-4.7"
-              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
+              className="w-full rounded-md border border-border bg-panel px-3 py-2 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
           </div>
 
@@ -136,7 +151,7 @@ export default function SettingsPage() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className="w-full rounded-md border border-border bg-white px-3 py-2 pr-10 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40 font-mono"
+                  className="w-full rounded-md border border-border bg-panel px-3 py-2 pr-10 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40 font-mono"
                 />
                 <button
                   type="button"
@@ -163,7 +178,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={handleReset}
-              className="flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-white text-txt-soft text-sm hover:bg-panel-soft transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-panel text-txt-soft text-sm hover:bg-panel-soft transition-colors"
             >
               <RotateCcw size={14} />
               重新加载
@@ -183,6 +198,40 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+      </Card>
+
+      {/* Advanced Model Config */}
+      <Card>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="w-full flex items-center justify-between py-1"
+        >
+          <span className="text-sm font-semibold text-txt">高级模型配置</span>
+          <ChevronDown size={16} className={`text-txt-soft transition-transform duration-200 ${showAdvanced ? "rotate-180" : ""}`} />
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 space-y-4">
+            <p className="text-xs text-txt-faint">留空则使用上方全局模型。可按阶段指定不同模型以优化成本或质量。</p>
+            {([
+              { label: "类型识别模型", value: genreModel, set: setGenreModel, placeholder: "用于判断小说类型/题材" },
+              { label: "信息提取模型", value: extractModel, set: setExtractModel, placeholder: "用于逐章提取关键事件" },
+              { label: "分析模型", value: analysisModel, set: setAnalysisModel, placeholder: "用于角色关系与因果分析" },
+              { label: "总结模型", value: summaryModel, set: setSummaryModel, placeholder: "用于生成摘要与阅读指南" },
+            ] as const).map((field) => (
+              <label key={field.label} className="flex flex-col gap-1.5">
+                <span className="text-sm text-txt-soft">{field.label}</span>
+                <input
+                  type="text"
+                  value={field.value}
+                  onChange={(e) => field.set(e.target.value)}
+                  placeholder={field.placeholder}
+                  className="w-full rounded-md border border-border bg-panel px-3 py-2 text-sm text-txt placeholder:text-txt-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+              </label>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>

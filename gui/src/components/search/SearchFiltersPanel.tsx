@@ -9,12 +9,12 @@ interface SearchFiltersPanelProps {
 
 const EVENT_TYPES = [
   { value: "", label: "全部类型" },
-  { value: "conflict", label: "冲突" },
-  { value: "turning_point", label: "转折点" },
-  { value: "relationship_change", label: "关系变化" },
-  { value: "status_change", label: "状态变化" },
-  { value: "foreshadowing", label: "伏笔" },
-  { value: "payoff", label: "伏笔回收" },
+  { value: "冲突", label: "冲突" },
+  { value: "转折", label: "转折点" },
+  { value: "关系变化", label: "关系变化" },
+  { value: "身份变化", label: "身份变化" },
+  { value: "伏笔", label: "伏笔" },
+  { value: "伏笔回收", label: "伏笔回收" },
 ];
 
 const FLAG_OPTIONS: { key: string; label: string }[] = [

@@ -17,7 +17,7 @@ class GenreClassification:
 class ChapterKeyEvent:
     """A key event extracted directly at chapter level."""
     event_id: str
-    event_type: str  # conflict, turning_point, relationship_change, status_change, foreshadowing, payoff
+    event_type: str  # 冲突, 转折, 关系变化, 身份变化, 伏笔, 伏笔回收
     title: str
     description: str
     characters: list[str] = field(default_factory=list)
@@ -29,6 +29,8 @@ class ChapterKeyEvent:
     involves_death_or_breakthrough: bool = False
     involves_relationship_change: bool = False
     importance: int = 3  # 1-5 scale
+    anchor_text: str = ""  # 原文中事件发生位置的引用片段，用于阅读器高亮定位
+    time_marker: str = ""  # 故事内时间标记
 
 
 @dataclass
@@ -36,6 +38,8 @@ class ChapterKeyEventSet:
     """Set of key events extracted from a single chapter."""
     events: list[ChapterKeyEvent] = field(default_factory=list)
     chapter_summary: str = ""
+    filler_ratio: float = 0.0   # 注水比例
+    filler_type: str = "none"   # 注水类型
 
 
 JsonDict = dict[str, Any]

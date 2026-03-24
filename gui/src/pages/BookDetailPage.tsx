@@ -1,12 +1,13 @@
-import { useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { BookOpen, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { BookOpen, ArrowLeft, CheckCircle2, ChevronDown } from "lucide-react";
 import { Card, SectionHeader, Badge, KeyValue, EmptyState } from "../components/primitives";
 import { usePolling } from "../lib/usePolling";
 import { api } from "../lib/api";
 import type { BookListItem, BookChapter } from "../lib/types";
 import { useActiveBook } from "../lib/useActiveBook";
 import { recordRecentView } from "../components/quick-actions/RecentViews";
+import SegmentPlan from "../components/segments/SegmentPlan";
 
 const statusMap: Record<string, { label: string; variant: "default" | "success" | "warning" | "danger" }> = {
   idle: { label: "未分析", variant: "default" },
@@ -37,18 +38,18 @@ export default function BookDetailPage() {
   const analyzedCount = chapters?.filter((c) => c.status === "ok" || c.importanceScore > 0).length ?? 0;
   const progress = chapterCount > 0 ? Math.round((analyzedCount / chapterCount) * 100) : 0;
 
-  // 书名加载后自动激活为当前书本（书名是"加载中"时不写入）
+  // 记录最近浏览（不自动选中为分析目标）
   useEffect(() => {
     if (bookId && title && title !== "加载中...") {
-      setActiveBook({ bookId, title });
       recordRecentView({ type: "chapter", id: bookId, label: title, path: `/book/${bookId}` });
     }
-  }, [bookId, title, setActiveBook]);
+  }, [bookId, title]);
 
   const isCurrentActive = activeBook?.bookId === bookId;
+  const [showPlan, setShowPlan] = useState(false);
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       {/* Back + Title */}
       <div className="flex items-center gap-3">
         <Link to="/library" className="text-txt-soft hover:text-accent transition-colors">
@@ -80,7 +81,7 @@ export default function BookDetailPage() {
         {bookId && (
           <Link
             to={`/reader/${bookId}`}
-            className="flex items-center gap-2 px-4 py-2 rounded-md border border-border/50 bg-white text-txt-soft text-sm shadow-sm hover:bg-panel-soft hover:text-txt transition-all duration-200"
+            className="flex items-center gap-2 px-4 py-2 rounded-md border border-border/50 bg-panel text-txt-soft text-sm shadow-sm hover:bg-panel-soft hover:text-txt transition-all duration-200"
           >
             <BookOpen className="w-4 h-4" />
             打开阅读器
@@ -96,13 +97,32 @@ export default function BookDetailPage() {
           <button
             type="button"
             onClick={() => setActiveBook({ bookId, title })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-white text-txt-soft text-sm shadow-sm hover:bg-panel-soft hover:text-txt transition-all duration-200"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-panel text-txt-soft text-sm shadow-sm hover:bg-panel-soft hover:text-txt transition-all duration-200"
           >
             <CheckCircle2 size={14} />
             设为当前分析目标
           </button>
         ) : null}
       </div>
+
+      {/* Reading Plan */}
+      {bookId && (
+        <Card>
+          <button
+            type="button"
+            onClick={() => setShowPlan(!showPlan)}
+            className="w-full flex items-center justify-between py-1"
+          >
+            <span className="text-sm font-semibold text-txt">阅读计划</span>
+            <ChevronDown size={16} className={`text-txt-soft transition-transform duration-200 ${showPlan ? "rotate-180" : ""}`} />
+          </button>
+          {showPlan && (
+            <div className="mt-3">
+              <SegmentPlan bookId={bookId} />
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Chapter list */}
       {!chapters ? (

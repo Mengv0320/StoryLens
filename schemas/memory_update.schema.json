@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MemoryUpdate",
+  "description": "Updated story memory after processing a chapter",
+  "type": "object",
+  "required": [
+    "characters", "relationships", "factions", "plot_state",
+    "last_chapter_id", "last_chapter_title", "total_chapters_processed"
+  ],
+  "properties": {
+    "characters": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/CharacterProfile" }
+    },
+    "relationships": {
+      "type": "array",
+      "maxItems": 40,
+      "items": { "$ref": "#/$defs/Relationship" }
+    },
+    "factions": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/FactionInfo" }
+    },
+    "plot_state": { "$ref": "#/$defs/PlotState" },
+    "last_chapter_id": { "type": "string" },
+    "last_chapter_title": { "type": "string" },
+    "total_chapters_processed": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "CharacterProfile": {
+      "type": "object",
+      "required": ["name", "role", "status", "summary", "last_seen_chapter"],
+      "properties": {
+        "name": { "type": "string" },
+        "aliases": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "role": { "type": "string", "enum": ["protagonist", "antagonist", "supporting", "minor"] },
+        "faction": { "type": "string", "default": "" },
+        "status": { "type": "string", "enum": ["alive", "dead", "missing", "unknown"] },
+        "power_level": { "type": "string", "default": "" },
+        "personality_traits": { "type": "array", "items": { "type": "string" }, "maxItems": 5, "default": [] },
+        "summary": { "type": "string", "maxLength": 160 },
+        "last_seen_chapter": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "Relationship": {
+      "type": "object",
+      "required": ["character_a", "character_b", "relation_type", "description", "since_chapter"],
+      "properties": {
+        "character_a": { "type": "string" },
+        "character_b": { "type": "string" },
+        "relation_type": {
+          "type": "string",
+          "enum": ["hostile", "suspicious", "allied", "subordinate", "mentor", "family", "romantic", "rival", "unknown"]
+        },
+        "description": { "type": "string", "maxLength": 100 },
+        "since_chapter": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "FactionInfo": {
+      "type": "object",
+      "required": ["name", "description", "status"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string", "maxLength": 160 },
+        "key_members": { "type": "array", "items": { "type": "string" }, "maxItems": 10, "default": [] },
+        "status": { "type": "string", "enum": ["active", "disbanded", "destroyed", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "PlotState": {
+      "type": "object",
+      "required": ["current_arc", "recent_events_digest"],
+      "properties": {
+        "current_arc": { "type": "string", "maxLength": 60 },
+        "arc_summary": { "type": "string", "maxLength": 300, "default": "" },
+        "active_threads": { "type": "array", "items": { "type": "string" }, "maxItems": 10, "default": [] },
+        "unresolved_foreshadowing": { "type": "array", "items": { "type": "string" }, "maxItems": 15, "default": [] },
+        "recent_events_digest": { "type": "string", "maxLength": 500 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

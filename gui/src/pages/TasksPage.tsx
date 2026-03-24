@@ -7,7 +7,7 @@ import type { BookListItem } from "../lib/types";
 import { usePolling } from "../lib/usePolling";
 import { useSessionState } from "../lib/useSessionState";
 import { Card, SectionHeader, EmptyState, Badge } from "../components/primitives";
-import { BookOpen, Search, Library, X, CheckCircle } from "lucide-react";
+import { BookOpen, Search, Library, X, CheckCircle, Square } from "lucide-react";
 
 type BookSource = "library" | "crawl";
 type SelectedBook = { title: string; author?: string | null; sourceUrl: string; bookId?: string; chapterCount?: number };
@@ -16,6 +16,7 @@ export default function TasksPage() {
   const [pipelineInputPath, setPipelineInputPath] = useSessionState("task:inputPath", "");
   const [pipelineModel, setPipelineModel] = useSessionState("task:model", "deepseek-v3");
   const [isStarting, setIsStarting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [selectedBook, setSelectedBook] = useSessionState<SelectedBook | null>("task:selectedBook", null);
   const [bookSource, setBookSource] = useSessionState<BookSource>("task:bookSource", "library");
@@ -31,14 +32,14 @@ export default function TasksPage() {
 
   // Auto-clear selectedBook if it was deleted from library
   useEffect(() => {
-    if (selectedBook?.bookId && libraryBooks && libraryBooks.length > 0) {
+    if (selectedBook?.bookId && libraryBooks) {
       const stillExists = libraryBooks.some((b) => b.bookId === selectedBook.bookId);
       if (!stillExists) {
         setSelectedBook(null);
         setPipelineInputPath("");
       }
     }
-  }, [libraryBooks]);
+  }, [libraryBooks, selectedBook, setSelectedBook, setPipelineInputPath]);
 
   const filteredBooks = useMemo(() => {
     if (!libraryBooks) return [];
@@ -101,6 +102,17 @@ export default function TasksPage() {
     }
   }
 
+  async function handleStop() {
+    setIsStopping(true);
+    try {
+      await api.stopPipeline();
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : "停止失败");
+    } finally {
+      setIsStopping(false);
+    }
+  }
+
   const pipelineStatus = status?.status;
   const progress = status?.progress;
   const startButtonLabel = isStarting
@@ -110,7 +122,7 @@ export default function TasksPage() {
       : "启动标准分析";
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-semibold text-txt">任务中心</h1>
 
       {/* ── 已选中书的提示 ── */}
@@ -144,7 +156,7 @@ export default function TasksPage() {
               className={[
                 "flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all",
                 bookSource === "library"
-                  ? "bg-white text-accent shadow-sm"
+                  ? "bg-panel text-accent shadow-sm"
                   : "text-txt-soft hover:text-txt",
               ].join(" ")}
             >
@@ -156,7 +168,7 @@ export default function TasksPage() {
               className={[
                 "flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all",
                 bookSource === "crawl"
-                  ? "bg-white text-accent shadow-sm"
+                  ? "bg-panel text-accent shadow-sm"
                   : "text-txt-soft hover:text-txt",
               ].join(" ")}
             >
@@ -170,7 +182,7 @@ export default function TasksPage() {
               <input
                 value={libraryFilter}
                 onChange={(e) => setLibraryFilter(e.target.value)}
-                className="h-10 w-full rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-accent"
+                className="h-10 w-full rounded-md border border-border bg-panel px-3 text-sm outline-none focus:border-accent"
                 placeholder="搜索书名或作者..."
               />
               {booksError && !libraryBooks && (
@@ -185,7 +197,7 @@ export default function TasksPage() {
                     key={book.bookId}
                     type="button"
                     onClick={() => handleSelectLibraryBook(book)}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-white px-4 py-3 text-left hover:border-accent hover:bg-accent-soft/30 transition-all group"
+                    className="flex items-center gap-3 rounded-lg border border-border bg-panel px-4 py-3 text-left hover:border-accent hover:bg-accent-soft/30 transition-all group"
                   >
                     <BookOpen size={16} className="text-txt-soft group-hover:text-accent shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -227,7 +239,7 @@ export default function TasksPage() {
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-txt-soft">模型</span>
-                <input value={pipelineModel} onChange={(e) => setPipelineModel(e.target.value)} className="h-10 rounded-md border border-border bg-white px-3 text-sm" />
+                <input value={pipelineModel} onChange={(e) => setPipelineModel(e.target.value)} className="h-10 rounded-md border border-border bg-panel px-3 text-sm" />
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-txt-soft">运行模式</span>
@@ -289,11 +301,22 @@ export default function TasksPage() {
                     style={{ width: progress.totalChapters > 0 ? `${(progress.completedChapters / progress.totalChapters) * 100}%` : "5%" }}
                   />
                 </div>
-                <div className="text-sm text-txt-soft">
-                  标准分析进行中 — {progress.currentStage || "准备中"}
-                  {progress.totalChapters > 0 && (
-                    <span className="ml-2 text-txt">({progress.completedChapters}/{progress.totalChapters} 章节)</span>
-                  )}
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-txt-soft">
+                    标准分析进行中 — {progress.currentStage || "准备中"}
+                    {progress.totalChapters > 0 && (
+                      <span className="ml-2 text-txt">({progress.completedChapters}/{progress.totalChapters} 章节)</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isStopping}
+                    onClick={handleStop}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-danger/30 text-danger text-xs font-medium hover:bg-danger-soft/50 disabled:opacity-50 transition-colors"
+                  >
+                    <Square size={12} />
+                    {isStopping ? "正在停止..." : "停止"}
+                  </button>
                 </div>
               </div>
             )}

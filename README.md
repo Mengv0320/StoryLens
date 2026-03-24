@@ -1,10 +1,10 @@
-# 📖 StoryLens — Web Novel Intelligence Pipeline
+# 📖 StoryLens — 网文智能分析管线
 
 <p align="center">
-  <b>English</b> | <a href="./README.zh-CN.md">中文</a>
+  <a href="./README.en.md">English</a> | <b>中文</b>
 </p>
 
-> Automatically extract structured story data from Chinese web novels: chapter summaries, key events, character relationships, narrative arcs — all in one click.
+> 从中文网络小说中自动提取结构化故事数据：章节摘要、关键事件、角色关系、叙事脉络——一键完成。
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
@@ -13,114 +13,114 @@
 
 ---
 
-## 🎯 What is this?
+## 🎯 这是什么？
 
-**StoryLens** is an AI-powered analysis tool for Chinese web novels.
+**StoryLens** 是一个面向中文网络小说的 AI 智能分析工具。
 
-Chinese web novels often span hundreds or even thousands of chapters, making it hard for readers to grasp the full picture. StoryLens uses Large Language Models (LLMs) to **automatically analyze novels** — from genre identification and chapter segmentation to key event extraction, character tracking, and narrative arc generation — helping you understand the core content of a book in minutes.
+网文动辄几百上千章，读者很难快速把握故事全貌。StoryLens 利用大语言模型（LLM）对小说进行**自动化结构化分析**——从体裁识别、章节切分，到关键事件提取、角色追踪、叙事脉络生成，帮助你在几分钟内理解一本书的核心内容。
 
-Whether you are:
-- 📖 **A reader** — Want to quickly evaluate if a novel is worth following, or recap forgotten plotlines
-- 🎬 **A content adapter** — Need to map out story structure and character relationships for animation/comics/film adaptation
-- 📊 **A researcher** — Want to analyze narrative patterns and character networks in web fiction
-- 🛠️ **A developer** — Want to build on top of structured novel data
+无论你是：
+- 📖 **网文读者** — 想快速了解一本书值不值得追，或者回顾遗忘的剧情
+- 🎬 **内容改编者** — 在做动画/漫画/影视改编前，需要梳理故事结构和角色关系
+- 📊 **研究者** — 想对网文的叙事模式、角色关系进行数据化分析
+- 🛠️ **开发者** — 想基于结构化的小说数据做二次开发
 
-StoryLens has you covered.
+StoryLens 都能帮到你。
 
-## 💡 Why StoryLens?
+## 💡 为什么选择 StoryLens？
 
-| Advantage | Description |
-|-----------|-------------|
-| **One-Click Launch** | Double-click `start.bat` and you're ready — no complex setup |
-| **Full Visual Pipeline** | Modern Web GUI: library → analysis → reader → search, all in your browser |
-| **Minimal Dependencies** | Backend needs only `openai` + `requests`, no heavy frameworks |
-| **Model Freedom** | Works with OpenAI / DeepSeek / Anthropic or any OpenAI-compatible API — use whatever fits your budget |
-| **Smart Caching** | Same chapter never hits the LLM twice — saves money and time |
-| **Incremental Analysis** | Novel updated? Only analyze new chapters, auto-merge with existing results |
-| **Story Memory** | Cross-chapter tracking of characters, relationships, and plot threads for more coherent analysis |
-| **Fully Local** | All data stored locally, nothing uploaded to third parties (except LLM API calls) |
+| 优势 | 说明 |
+|------|------|
+| **一键启动** | 双击 `start.bat` 即可使用，无需复杂配置 |
+| **全流程可视化** | 现代 Web GUI，书架→分析→阅读→搜索，所见即所得 |
+| **极简依赖** | 后端仅需 `openai` + `requests` 两个包，无重型框架 |
+| **模型自由** | 兼容 OpenAI / DeepSeek / Anthropic 等任意 OpenAI 兼容接口，用你最划算的模型 |
+| **智能缓存** | 相同章节不重复调用 LLM，省钱省时间 |
+| **增量分析** | 小说更新了？只需分析新章节，自动与已有结果合并 |
+| **故事记忆** | 跨章节追踪角色、关系和情节线索，分析结果更连贯 |
+| **完全本地** | 数据全部存储在本地，不上传任何内容到第三方（除 LLM API 调用） |
 
-## 📸 Screenshots
+## 📸 界面预览
 
-| Library | Reader (Original + Analysis) |
+| 书架管理 | 阅读器（原文+分析对照） |
 |:---:|:---:|
-| ![Library](image/1.png) | ![Reader](image/2.png) |
+| ![书架](image/1.png) | ![阅读器](image/2.png) |
 
-| Dashboard | Narrative Analysis |
+| 分析总览 | 叙事分析 |
 |:---:|:---:|
-| ![Dashboard](image/3.png) | ![Narrative](image/4.png) |
+| ![分析总览](image/3.png) | ![叙事分析](image/4.png) |
 
-| Characters | Timeline |
+| 角色图谱 | 时间线 |
 |:---:|:---:|
-| ![Characters](image/5.png) | ![Timeline](image/6.png) |
+| ![角色](image/5.png) | ![时间线](image/6.png) |
 
-| Task Center (Crawl + Analysis) |
+| 任务中心（爬取+分析） |
 |:---:|
-| ![Tasks](image/7.png) |
+| ![任务中心](image/7.png) |
 
-## ✨ Features
+## ✨ 功能特性
 
-- **📝 Standard Analysis** — Genre classification → Chapter splitting → Key event extraction → Importance scoring, fully automated
-- **📊 Narrative Analysis** — Two-layer narrative analysis: group summaries + book-level synthesis for complete story arc mapping
-- **🧠 Story Memory** — Cross-chapter character/relationship/plot state tracking with alias normalization
-- **🕷️ Web Crawling** — Fetch novels directly from index pages with chapter range selection and encoding support
-- **📚 Bookshelf** — Multi-book management with independent analysis, supports incremental analysis (continue from previous runs)
-- **🖥️ Web GUI** — Modern React frontend with bookshelf, reader, character profiles, timeline, and more
-- **⚡ Smart Caching** — Cache keyed by book fingerprint + model + pipeline version, avoids redundant LLM calls
-- **🔌 Multi-LLM Support** — Compatible with OpenAI / Anthropic / DeepSeek and any OpenAI-compatible API
-- **🛑 Graceful Stop** — Stop analysis anytime; completed chapter results are preserved
-- **🔄 Dual-Provider Failover** — Configure primary + secondary LLM providers with automatic failover
+- **📝 标准分析** — 体裁分类 → 章节切分 → 关键事件提取 → 重要性评分，全流程自动化
+- **📊 叙事分析** — 两层叙事分析：分组摘要 + 全书综合，生成完整的故事脉络
+- **🧠 故事记忆** — 跨章节角色/关系/情节状态追踪，支持别名归一化
+- **🕷️ 网页爬取** — 直接从小说目录页抓取内容，支持章节范围选择、编码设置
+- **📚 书架管理** — 多书管理，独立分析，支持增量分析（续接之前的分析）
+- **🖥️ Web GUI** — 现代化 React 前端，包含书架、阅读器、角色图谱、时间线等
+- **⚡ 智能缓存** — 基于书指纹+模型+管线版本的缓存系统，避免重复 LLM 调用
+- **🔌 多 LLM 支持** — 兼容 OpenAI / Anthropic / DeepSeek 等 OpenAI 兼容接口
+- **🛑 优雅停止** — 分析过程中随时可停止，已完成的章节结果保留
+- **🔄 双提供商容灾** — 支持配置主/备两个 LLM 提供商，自动容灾切换
 
-## 🏗️ Architecture
+## 🏗️ 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    React GUI (Vite + TS)                     │
-│  Library │ Tasks │ Dashboard │ Reader │ Characters │ Search  │
+│                     React GUI (Vite + TS)                    │
+│  书架 │ 任务中心 │ 分析总览 │ 阅读器 │ 角色 │ 时间线 │ 搜索  │
 └────────────────────────┬────────────────────────────────────┘
                          │ HTTP API
 ┌────────────────────────▼────────────────────────────────────┐
-│             Python API Server (stdlib HTTP)                  │
+│              Python API Server (stdlib HTTP)                 │
 │  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌───────────────┐ │
-│  │ Book Mgmt│ │ Pipeline  │ │ Crawler  │ │ Static Files  │ │
+│  │ 书架管理 │ │ 管线调度  │ │ 爬虫引擎 │ │ 静态文件服务  │ │
 │  └──────────┘ └─────┬─────┘ └──────────┘ └───────────────┘ │
 │                     │                                       │
 │  ┌──────────────────▼──────────────────────────────────────┐│
-│  │           standard_analysis pipeline                     ││
-│  │  Genre → Chapter Split → Parallel Extraction → Scoring  ││
+│  │            standard_analysis 管线                        ││
+│  │  体裁分类 → 章节切分 → 并行事件提取 → 规则评分          ││
 │  │                    ↓                                     ││
 │  │           narrative_analyzer                             ││
-│  │  Group Summaries → Book-level Synthesis                  ││
+│  │  分组叙事摘要 → 全书综合分析                              ││
 │  └─────────────────────────────────────────────────────────┘│
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────────┐ │
-│  │LLM Client│ │  Cache   │ │  Memory  │ │ Schema Validator│ │
+│  │ LLM客户端│ │ 缓存系统 │ │ 故事记忆 │ │ Schema校验     │ │
 │  └─────────┘ └──────────┘ └──────────┘ └─────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### Prerequisites
+### 环境要求
 
 - Python 3.10+
-- Node.js 18+ (only needed for frontend development)
-- An OpenAI-compatible API key
+- Node.js 18+（仅前端开发需要）
+- OpenAI 兼容的 API Key
 
-### Installation
+### 安装
 
 ```bash
 git clone https://github.com/Mengv0320/StoryLens.git
 cd StoryLens
 
-# Python dependencies
+# Python 依赖
 pip install -r requirements.txt
 
-# Configure environment
+# 配置环境变量
 cp .env.example .env
-# Edit .env and fill in your API key
+# 编辑 .env，填入你的 API Key
 ```
 
-### One-Click Launch
+### 一键启动
 
 ```bash
 # Windows
@@ -130,102 +130,97 @@ start.bat
 bash start.sh
 ```
 
-Visit `http://localhost:8765` to use the full GUI.
+启动后访问 `http://localhost:8765` 即可使用完整 GUI。
 
-### Development Mode
+### 开发模式
 
 ```bash
-# Backend
+# 后端
 python -m src.api_server
 
-# Frontend (separate terminal)
+# 前端（另一个终端）
 cd gui && npm install && npm run dev
 ```
 
-Frontend dev server runs at `http://localhost:5173` with API requests proxied to the backend.
+前端开发服务器运行在 `http://localhost:5173`，自动代理 API 请求到后端。
 
-> **Note:** Set `NO_PROXY="*"` before starting the API server if you have a system proxy, to avoid ProxyError/SSLEOFError.
+## 📖 使用方式
 
-## 📖 Usage
-
-### CLI — Standard Analysis
+### CLI — 标准分析
 
 ```bash
 python -m src.main input.txt --output result.json
 python -m src.main input.txt --output result.json --model deepseek-chat --use-cache
 ```
 
-### CLI — Web Crawling
+### CLI — 网页爬取
 
 ```bash
-# Crawl and save as text
+# 爬取小说并保存为文本
 python -m src.main --crawl-url https://example.com/novel/ --output novel.txt
 
-# Crawl chapters 1-50 only
+# 仅爬取前 50 章
 python -m src.main --crawl-url https://example.com/novel/ --chapter-start 1 --chapter-end 50
 
-# List available chapters
+# 查看章节列表
 python -m src.main --crawl-url https://example.com/novel/ --list-chapters
 ```
 
-### GUI Pages
+### GUI 功能
 
-| Page | Description |
-|------|-------------|
-| 📚 Library | Multi-book management, one-click analysis, delete/clean |
-| 📋 Tasks | Start/stop analysis pipeline, real-time progress |
-| 📊 Dashboard | Chapter stats, key characters, story stages |
-| 📖 Reader | Side-by-side original text and analysis comparison |
-| 👥 Characters | Character list, details, event participation |
-| 🕐 Timeline | Story event timeline visualization |
-| 📈 Narrative | Group summaries + book-level narrative synthesis |
-| 🔍 Search | Full-text search across chapters and events |
-| ⚙️ Settings | API configuration, model selection, parameter tuning |
+| 页面 | 功能 |
+|------|------|
+| 📚 书架 | 多书管理，一键分析，删除/清洗 |
+| 📋 任务中心 | 启动/停止分析管线，实时进度 |
+| 📊 分析总览 | 章节统计、关键角色、故事阶段 |
+| 📖 阅读器 | 原文/分析对照阅读 |
+| 👥 角色 | 角色列表、详情、事件参与 |
+| 🕐 时间线 | 故事事件时间线可视化 |
+| 📈 叙事分析 | 分组摘要 + 全书综合叙事 |
+| 🔍 搜索 | 全文搜索章节和事件 |
+| ⚙️ 设置 | API 配置、模型选择、参数调整 |
 
-## ⚙️ Environment Variables
+## ⚙️ 环境变量
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | ✅ | LLM API key |
-| `OPENAI_MODEL` | | Model name (default: `gpt-4o`) |
-| `OPENAI_BASE_URL` | | API endpoint (supports proxies / self-hosted) |
-| `OPENAI_TYPE` | | Provider type: `openai` (default) or `anthropic` |
-| `OPENAI_API_KEY_2` | | Secondary provider API key |
-| `OPENAI_BASE_URL_2` | | Secondary provider endpoint |
-| `API_TOKEN` | | API access token (auth disabled if not set) |
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `OPENAI_API_KEY` | ✅ | LLM API 密钥 |
+| `OPENAI_MODEL` | | 模型名称（默认 `gpt-4o`） |
+| `OPENAI_BASE_URL` | | API 地址（支持代理/自部署） |
+| `OPENAI_TYPE` | | 提供商类型：`openai`（默认）或 `anthropic` |
+| `OPENAI_API_KEY_2` | | 备用提供商密钥 |
+| `OPENAI_BASE_URL_2` | | 备用提供商地址 |
+| `API_TOKEN` | | API 访问令牌（未设置则免认证） |
 
-See [`.env.example`](./.env.example) for the full list.
-
-## 📂 Project Structure
+## 📂 项目结构
 
 ```
 src/
-  api_server.py          HTTP API server (stdlib ThreadingHTTPServer)
-  standard_analysis.py   Standard analysis pipeline orchestrator
-  narrative_analyzer.py  Two-layer narrative analysis
-  stages.py              LLM clients (OpenAI / Anthropic / MultiProvider)
-  story_memory.py        Cross-chapter story memory system
-  web_crawler.py         Web novel crawler
-  book_index.py          Book index management
-  rule_scoring.py        Rule-based importance scoring
-  chaptering.py          Chapter splitting from raw text
-  main.py                CLI entry point
+  api_server.py          HTTP API 服务器
+  standard_analysis.py   标准分析管线
+  narrative_analyzer.py  叙事分析模块
+  stages.py              LLM 客户端（OpenAI/Anthropic/多提供商）
+  story_memory.py        故事记忆系统
+  web_crawler.py         网页爬虫
+  book_index.py          书架索引管理
+  rule_scoring.py        规则化重要性评分
+  chaptering.py          章节切分
+  main.py                CLI 入口
 gui/
-  src/pages/             13 feature pages
-  src/components/        Reusable UI component library
-  src/lib/               API client, types, custom hooks
-prompts/                 LLM prompt templates (5 templates)
-schemas/                 JSON Schema definitions (5 schemas)
-data/                    Runtime data (gitignored)
+  src/pages/             13 个功能页面
+  src/components/        UI 组件库
+  src/lib/               API 客户端、类型定义、自定义 Hooks
+prompts/                 LLM 提示词模板（5 个）
+schemas/                 JSON Schema 定义（5 个）
 ```
 
-## 🔧 Tech Stack
+## 🔧 技术栈
 
-**Backend:** Python 3.10+ · stdlib `http.server` · OpenAI SDK · Multi-threaded parallelism
+**后端：** Python 3.10+ · stdlib `http.server` · OpenAI SDK · 多线程并行
 
-**Frontend:** React 19 · TypeScript 5.9 · Vite 8 · TailwindCSS 3 · Lucide Icons · React Router 7
+**前端：** React 19 · TypeScript 5.9 · Vite 8 · TailwindCSS 3 · Lucide Icons · React Router 7
 
-**Minimal Dependencies:** Backend requires only `openai` and `requests`
+**依赖极简：** 后端仅依赖 `openai` 和 `requests` 两个包
 
 ## 📄 License
 

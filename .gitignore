@@ -24,6 +24,11 @@ data/exports/
 data/runs/
 data/cache/
 data/raw/
+data/logs/
+
+# Dev docs (not for release)
+tasks/
+docs/
 
 # Node / GUI build
 node_modules/

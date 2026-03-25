@@ -90,19 +90,6 @@ _paths = Paths.discover()
 # ---------------------------------------------------------------------------
 
 
-_RELATION_MAP = {
-    "enemy": "hostile", "rival": "hostile",
-    "ally": "allied",
-    "master_disciple": "mentor",
-    "lover": "romantic",
-    "family": "family",
-    "neutral": "unknown",
-}
-
-
-def _map_relation_type(rt: str) -> str:
-    return _RELATION_MAP.get(rt, "unknown")
-
 
 def sanitize_name(value: str) -> str:
     safe = "".join(

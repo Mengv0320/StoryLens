@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from dataclasses import asdict
 from typing import Protocol
 
@@ -388,7 +389,7 @@ class MultiProviderClient:
         """providers: list of (client, needs_sanitize) tuples."""
         self._providers = providers
         self._idx = 0
-        self._lock = __import__("threading").Lock()
+        self._lock = threading.Lock()
         self.last_usage: dict[str, int] | None = None
 
     def complete_json(self, prompt: str, max_tokens: int = 8192) -> JsonDict:

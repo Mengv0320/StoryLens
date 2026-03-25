@@ -1,9 +1,9 @@
 import type {
   ProgressSnapshot, DashboardData,
   CharacterListItem, CharacterDetail, TimelineItem,
-  ExportItem, FailureItem, LogItem,
+  ExportItem, LogItem,
   StandardAnalysisResult,
-  NarrativeResult, GroupSummary, BookSynthesis,
+  NarrativeResult,
   BookListItem, BookChapter, BookChapterDetail, BookLatestAnalysis,
   Segment, ReadingGuide,
 } from "./types";
@@ -111,7 +111,6 @@ export const api = {
   getCharacterDetail: (id: string) => getJson<CharacterDetail>(`/api/results/characters/${id}`),
   getTimeline: () => getJson<TimelineItem[]>("/api/results/timeline"),
   getExports: () => getJson<ExportItem[]>("/api/results/exports"),
-  getFailures: () => getJson<FailureItem[]>("/api/results/failures"),
   getLogs: () => getJson<LogItem[]>("/api/results/logs"),
   getSettings: () => getJson<Record<string, unknown>>("/api/settings"),
   updateSettings: (settings: Record<string, string>) =>
@@ -119,13 +118,9 @@ export const api = {
 
   // Standard Analysis
   getStandardAnalysis: () => getJson<StandardAnalysisResult>("/api/results/standard-analysis"),
-  getChapterIndex: () => getJson<Array<{ chapterId: string; title: string }>>("/api/results/chapter-index"),
-  getChapterResult: (chapterId: string) => getJson<any>(`/api/results/chapters/${encodeURIComponent(chapterId)}`),
 
   // Narrative Analysis
   getNarrative: () => getJson<NarrativeResult>("/api/results/narrative"),
-  getNarrativeGroups: () => getJson<GroupSummary[]>("/api/results/narrative/groups"),
-  getNarrativeSynthesis: () => getJson<BookSynthesis>("/api/results/narrative/synthesis"),
 
   // Book API
   getBooks: () => getJson<BookListItem[]>("/api/books"),

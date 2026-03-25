@@ -40,24 +40,6 @@ StoryLens has you covered.
 | **Story Memory** | Cross-chapter tracking of characters, relationships, and plot threads for more coherent analysis |
 | **Fully Local** | All data stored locally, nothing uploaded to third parties (except LLM API calls) |
 
-## 📸 Screenshots
-
-| Library | Reader (Original + Analysis) |
-|:---:|:---:|
-| ![Library](image/1.png) | ![Reader](image/2.png) |
-
-| Dashboard | Narrative Analysis |
-|:---:|:---:|
-| ![Dashboard](image/3.png) | ![Narrative](image/4.png) |
-
-| Characters | Timeline |
-|:---:|:---:|
-| ![Characters](image/5.png) | ![Timeline](image/6.png) |
-
-| Task Center (Crawl + Analysis) |
-|:---:|
-| ![Tasks](image/7.png) |
-
 ## ✨ Features
 
 - **📝 Standard Analysis** — Genre classification → Chapter splitting → Key event extraction → Importance scoring, fully automated
@@ -145,6 +127,24 @@ cd gui && npm install && npm run dev
 Frontend dev server runs at `http://localhost:5173` with API requests proxied to the backend.
 
 > **Note:** Set `NO_PROXY="*"` before starting the API server if you have a system proxy, to avoid ProxyError/SSLEOFError.
+
+## 📸 Screenshots
+
+| Library | Reader (Original + Analysis) |
+|:---:|:---:|
+| ![Library](image/1.png) | ![Reader](image/2.png) |
+
+| Dashboard | Narrative Analysis |
+|:---:|:---:|
+| ![Dashboard](image/3.png) | ![Narrative](image/4.png) |
+
+| Characters | Timeline |
+|:---:|:---:|
+| ![Characters](image/5.png) | ![Timeline](image/6.png) |
+
+| Task Center (Crawl + Analysis) |
+|:---:|
+| ![Tasks](image/7.png) |
 
 ## 📖 Usage
 
